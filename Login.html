@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            altametrics: {
+              blue: '#0055CC',
+              green: '#70C14A',
+              dark: '#1A1A1A',
+              light: '#F4F7FA'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <?!= include('Styles'); ?>
+</head>
+
+<body>
+  <div id="app">
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="screen active">
+      <div class="login-container">
+        <div class="login-card">
+          <div class="login-header">
+            <div class="logo">
+              <i class="fas fa-graduation-cap"></i>
+            </div>
+            <h1>Training Management System</h1>
+            <p>Sign in to access your training portal</p>
+          </div>
+
+          <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+              <label for="email">
+                <i class="fas fa-envelope"></i>
+                Email Address
+              </label>
+              <input type="email" id="email" name="email" placeholder="Enter your email" required>
+            </div>
+
+            <div class="form-group">
+              <label for="password">
+                <i class="fas fa-lock"></i>
+                Password
+              </label>
+              <div class="password-input">
+                <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                <button type="button" class="toggle-password" onclick="togglePassword()">
+                  <i class="fas fa-eye" id="toggleIcon"></i>
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+              <span class="btn-text">Sign In</span>
+              <span class="btn-loader" style="display: none;">
+                <i class="fas fa-spinner fa-spin"></i>
+              </span>
+            </button>
+          </form>
+
+          <div class="login-footer">
+            <a href="javascript:void(0);" onclick="showForgotPassword(); return false;" class="forgot-password">
+              <i class="fas fa-key"></i>
+              Forgot Password?
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div id="forgotPasswordModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2><i class="fas fa-key"></i> Password Recovery</h2>
+          <button class="close-btn" onclick="closeForgotPassword()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Enter your email address and we'll send you your password.</p>
+          <form id="forgotPasswordForm" onsubmit="handleForgotPassword(event)">
+            <div class="form-group">
+              <label for="recoveryEmail">
+                <i class="fas fa-envelope"></i>
+                Email Address
+              </label>
+              <input type="email" id="recoveryEmail" name="recoveryEmail" placeholder="Enter your email" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" id="recoveryBtn">
+              <span class="btn-text">Send Password</span>
+              <span class="btn-loader" style="display: none;">
+                <i class="fas fa-spinner fa-spin"></i>
+              </span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Screen -->
+    <div id="dashboardScreen" class="screen">
+      <nav class="navbar">
+        <div class="nav-brand">
+          <i class="fas fa-graduation-cap"></i>
+          <span>TMS</span>
+        </div>
+
+        <div class="nav-user">
+          <span id="userName"></span>
+          <span class="user-type-badge" id="userTypeBadge"></span>
+
+          <!-- Add Training -->
+          <button class="btn btn-add-training" onclick="openAddTrainingModal()">
+            <i class="fas fa-plus"></i>
+            Add Training
+          </button>
+
+          <!-- Settings (Trainer Only) -->
+          <button id="settingsBtn" class="btn btn-outline btn-sm btn-hidden" onclick="openSettingsModal()">
+            <i class="fas fa-cog"></i>
+            Settings
+          </button>
+
+          <button class="btn btn-outline btn-sm" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i>
+            Logout
+          </button>
+        </div>
+      </nav>
+
+      <div class="main-content">
+        <div class="sidebar">
+          <!-- Dynamic sidebar with categories and subsections -->
+          <div class="sidebar-menu" id="sidebarMenu">
+            <div class="menu-item active" data-key="calendar" onclick="showSection('calendar')" role="button" tabindex="0">
+              <i class="fas fa-calendar-alt"></i>
+              <span>Calendar</span>
+            </div>
+
+            <!-- Categories injected here dynamically -->
+            <div id="categoryMenuContainer"></div>
+
+            <div class="menu-item" data-key="compliance" onclick="showSection('compliance')" role="button" tabindex="0">
+              <i class="fas fa-clipboard-check"></i>
+              <span>Compliance</span>
+            </div>
+
+            <div class="menu-item" data-key="others" onclick="showSection('others')" role="button" tabindex="0">
+              <i class="fas fa-ellipsis-h"></i>
+              <span>Others</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-area">
+
+          <!-- Calendar Section -->
+          <div id="calendarSection" class="section active">
+            <div class="calendar-section-wrapper">
+              <div class="calendar-top-header">
+                <div class="calendar-title-area">
+                  <h2 id="calendarMonthLabel" class="calendar-month-title">January 2025</h2>
+                  <p class="calendar-subtitle">Training schedule overview</p>
+                </div>
+
+                <div class="calendar-controls">
+                  <div class="calendar-jump-controls">
+                    <select id="jumpMonth" onchange="jumpToDate()" class="calendar-select">
+                      <option value="0">January</option><option value="1">February</option><option value="2">March</option>
+                      <option value="3">April</option><option value="4">May</option><option value="5">June</option>
+                      <option value="6">July</option><option value="7">August</option><option value="8">September</option>
+                      <option value="9">October</option><option value="10">November</option><option value="11">December</option>
+                    </select>
+                    <select id="jumpYear" onchange="jumpToDate()" class="calendar-select"></select>
+                  </div>
+
+                  <div class="calendar-nav-controls">
+                    <button onclick="changeCalendarMonth(-1)" class="calendar-nav-btn">
+                      <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button onclick="goToToday()" class="calendar-today-btn">Today</button>
+                    <button onclick="changeCalendarMonth(1)" class="calendar-nav-btn">
+                      <i class="fas fa-chevron-right"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="calendar-grid-container">
+                <div class="calendar-weekday-header">
+                  <div class="weekday-cell">Sun</div><div class="weekday-cell">Mon</div><div class="weekday-cell">Tue</div>
+                  <div class="weekday-cell">Wed</div><div class="weekday-cell">Thu</div><div class="weekday-cell">Fri</div><div class="weekday-cell">Sat</div>
+                </div>
+                <div id="calendarGrid" class="calendar-days-grid"></div>
+              </div>
+
+              <div class="calendar-legend">
+                <div class="legend-item"><span class="legend-dot sbl"></span><span>SBL</span></div>
+                <div class="legend-item"><span class="legend-dot ilt"></span><span>ILT</span></div>
+                <div class="legend-item"><span class="legend-dot isms"></span><span>ISMS</span></div>
+                <div class="legend-item"><span class="legend-dot misc"></span><span>Misc</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ILT Section -->
+          <div id="iltSection" class="section">
+            <div class="section-header">
+              <h2><i class="fas fa-chalkboard-teacher"></i> Instructor-Led Training (ILT)</h2>
+            </div>
+            <div class="sub-nav">
+              <div class="sub-nav-item active" id="iltDashboardTab" onclick="showILTSubSection('dashboard')" role="button" tabindex="0">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+              </div>
+              <div class="sub-nav-item" id="iltProgressTab" onclick="showILTSubSection('progress')" role="button" tabindex="0">
+                <i class="fas fa-tasks"></i> Training Progress
+              </div>
+              <div class="sub-nav-item" id="iltEvaluationsTab" onclick="showILTSubSection('evaluations')" role="button" tabindex="0">
+                <i class="fas fa-star"></i> Evaluations
+              </div>
+              <div class="sub-nav-item" id="iltReportsTab" onclick="showILTSubSection('reports')" role="button" tabindex="0">
+                <i class="fas fa-certificate"></i> Reports & Certification
+              </div>
+            </div>
+            <div id="iltContent" class="sub-content"></div>
+          </div>
+
+          <!-- SBL Section -->
+          <div id="sblSection" class="section">
+            <div class="section-header">
+              <h2><i class="fas fa-video"></i> Simulation-Based Learning (SBL)</h2>
+            </div>
+            <div class="sub-nav">
+              <div class="sub-nav-item active" id="sblDashboardTab" onclick="showSBLSubSection('dashboard')" role="button" tabindex="0">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+              </div>
+              <div class="sub-nav-item" id="sblVideosTab" onclick="showSBLSubSection('videos')" role="button" tabindex="0">
+                <i class="fas fa-play-circle"></i> Videos
+              </div>
+              <div class="sub-nav-item" id="sblEvaluationsTab" onclick="showSBLSubSection('evaluations')" role="button" tabindex="0">
+                <i class="fas fa-star"></i> Evaluations
+              </div>
+              <div class="sub-nav-item" id="sblReportsTab" onclick="showSBLSubSection('reports')" role="button" tabindex="0">
+                <i class="fas fa-certificate"></i> Reports & Certification
+              </div>
+            </div>
+            <div id="sblContent" class="sub-content"></div>
+          </div>
+
+          <!-- Dynamic Category Section -->
+          <div id="categorySection" class="section">
+            <div class="section-header">
+              <h2 id="categorySectionTitle"><i class="fas fa-folder"></i> Category Training</h2>
+            </div>
+            <div class="sub-nav">
+              <div class="sub-nav-item active" id="categoryDashboardTab" onclick="showCategorySubSection('dashboard')" role="button" tabindex="0">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+              </div>
+              <div class="sub-nav-item" id="categoryProgressTab" onclick="showCategorySubSection('progress')" role="button" tabindex="0">
+                <i class="fas fa-tasks"></i> Training Progress
+              </div>
+              <div class="sub-nav-item" id="categoryEvaluationsTab" onclick="showCategorySubSection('evaluations')" role="button" tabindex="0">
+                <i class="fas fa-star"></i> Evaluations
+              </div>
+              <div class="sub-nav-item" id="categoryReportsTab" onclick="showCategorySubSection('reports')" role="button" tabindex="0">
+                <i class="fas fa-certificate"></i> Reports & Certification
+              </div>
+            </div>
+            <div id="categorySectionContent" class="sub-content"></div>
+          </div>
+
+          <!-- Compliance Section -->
+          <div id="complianceSection" class="section">
+            <div class="section-header">
+              <h2><i class="fas fa-clipboard-check"></i> Compliance</h2>
+            </div>
+            <div class="sub-nav">
+              <div class="sub-nav-item active" id="complianceCalendarTab" onclick="showComplianceSubSection('calendar')" role="button" tabindex="0">
+                <i class="fas fa-calendar"></i> Calendar
+              </div>
+              <div class="sub-nav-item" id="complianceStatusTab" onclick="showComplianceSubSection('status')" role="button" tabindex="0">
+                <i class="fas fa-chart-line"></i> Status
+              </div>
+              <div class="sub-nav-item" id="complianceReportsTab" onclick="showComplianceSubSection('reports')" role="button" tabindex="0">
+                <i class="fas fa-file-alt"></i> Reports
+              </div>
+              <div class="sub-nav-item" id="complianceManagementTab" onclick="showComplianceSubSection('management')" role="button" tabindex="0">
+                <i class="fas fa-cogs"></i> Management
+              </div>
+            </div>
+            <div id="complianceContent" class="sub-content"></div>
+          </div>
+
+          <!-- Others Section -->
+          <div id="othersSection" class="section">
+            <div class="section-header">
+              <h2><i class="fas fa-ellipsis-h"></i> Others</h2>
+            </div>
+            <div id="othersContent" class="sub-content"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Training Modal -->
+    <div id="addTrainingModal" class="modal">
+      <div class="modal-content modal-lg" style="max-width:700px;">
+        <div class="modal-header">
+          <h2><i class="fas fa-plus-circle"></i> Add New Training</h2>
+          <button class="close-btn" onclick="closeAddTrainingModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="step-indicators">
+            <div class="step-indicator active"><span>1</span><p>Basic Info</p></div>
+            <div class="step-indicator"><span>2</span><p>Trainees</p></div>
+            <div class="step-indicator"><span>3</span><p>Schedule</p></div>
+          </div>
+
+          <form id="trainingForm">
+            <!-- Step 1: Basic Info -->
+            <div class="form-step active" id="step1">
+              <div class="form-group">
+                <label><i class="fas fa-hashtag"></i> Batch Number</label>
+                <input type="text" id="batchCount" placeholder="Auto-generated" readonly>
+              </div>
+              <div class="form-group">
+                <label><i class="fas fa-folder"></i> Training Category</label>
+                <select id="trainingCategory" onchange="validateTrainingForm()">
+                  <option value="">Select Category</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label><i class="fas fa-laptop"></i> Applications</label>
+                <div class="input-with-button">
+                  <select id="appInput">
+                    <option value="">Select an application</option>
+                  </select>
+                  <button class="btn btn-primary" type="button" onclick="addApplication()">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div id="applicationChips" class="chips-container"></div>
+              </div>
+              <div class="form-group">
+                <label><i class="fas fa-layer-group"></i> Training Levels</label>
+                <div class="level-buttons">
+                  <button type="button" class="btn btn-outline btn-sm" onclick="addLevel('Beginner')">Beginner</button>
+                  <button type="button" class="btn btn-outline btn-sm" onclick="addLevel('Intermediate')">Intermediate</button>
+                  <button type="button" class="btn btn-outline btn-sm" onclick="addLevel('Advanced')">Advanced</button>
+                </div>
+                <div id="levelChips" class="chips-container"></div>
+              </div>
+            </div>
+
+            <!-- Step 2: Trainees -->
+            <div class="form-step" id="step2">
+              <div class="form-group">
+                <label><i class="fas fa-user"></i> Trainee Name</label>
+                <input type="text" id="traineeNameInput" placeholder="Enter trainee name">
+              </div>
+              <div class="form-group">
+                <label><i class="fas fa-envelope"></i> Trainee Email</label>
+                <div class="input-with-button">
+                  <input type="email" id="traineeEmailInput" placeholder="Enter trainee email">
+                  <button class="btn btn-primary" type="button" onclick="addTrainee()">
+                    <i class="fas fa-plus"></i> Add
+                  </button>
+                </div>
+              </div>
+              <div class="trainees-list" id="traineesList"></div>
+              <p id="noTraineesMsg" class="empty-msg">No trainees added yet</p>
+            </div>
+
+            <!-- Step 3: Schedule -->
+            <div class="form-step" id="step3">
+              <div class="form-row">
+                <div class="form-group">
+                  <label><i class="fas fa-calendar"></i> Start Date</label>
+                  <input type="date" id="trainingStartDate" onchange="validateTrainingForm()">
+                </div>
+                <div class="form-group">
+                  <label><i class="fas fa-calendar-check"></i> End Date</label>
+                  <input type="date" id="trainingEndDate" onchange="validateTrainingForm()">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label><i class="fas fa-clock"></i> Intermediate Offset (days)</label>
+                  <input type="number" id="offsetIntermediate" value="30" min="1">
+                </div>
+                <div class="form-group">
+                  <label><i class="fas fa-clock"></i> Advanced Offset (days)</label>
+                  <input type="number" id="offsetAdvanced" value="60" min="1">
+                </div>
+              </div>
+            </div>
+          </form>
+
+          <div class="modal-footer">
+            <button class="btn btn-outline btn-hidden" id="prevStepBtn" onclick="prevTrainingStep()">
+              <i class="fas fa-arrow-left"></i> Previous
+            </button>
+            <button class="btn btn-primary" id="nextStepBtn" onclick="nextTrainingStep()">
+              Next <i class="fas fa-arrow-right"></i>
+            </button>
+            <button class="btn btn-success btn-hidden" id="saveTrainingBtn" onclick="saveTraining()" disabled>
+              <i class="fas fa-save"></i> Save Training
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+      <div class="modal-content modal-lg" style="max-width:600px;">
+        <div class="modal-header">
+          <h2><i class="fas fa-cog"></i> Settings</h2>
+          <button class="close-btn" onclick="closeSettingsModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-tabs">
+            <button class="btn btn-primary" id="settingsTabCategory" onclick="switchSettingsTab('category')">
+              <i class="fas fa-folder"></i> Categories
+            </button>
+            <button class="btn btn-outline" id="settingsTabApplication" onclick="switchSettingsTab('application')">
+              <i class="fas fa-laptop"></i> Applications
+            </button>
+          </div>
+
+          <div id="settingsPanelCategory" class="settings-panel">
+            <div class="form-group">
+              <label><i class="fas fa-folder"></i> Add Category</label>
+              <div class="input-with-button">
+                <input type="text" id="newCategoryInput" placeholder="e.g. HR Training">
+                <button class="btn btn-primary" type="button" onclick="addCategoryFromSettings()">
+                  <i class="fas fa-plus"></i> Add
+                </button>
+              </div>
+            </div>
+
+            <div class="data-table-container" style="margin-top:14px;">
+              <table class="data-table">
+                <thead><tr><th>Existing Categories</th><th></th></tr></thead>
+                <tbody id="settingsCategoriesList"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="settingsPanelApplication" class="settings-panel" style="display:none;">
+            <div class="form-group">
+              <label><i class="fas fa-laptop"></i> Add Application</label>
+              <div class="input-with-button">
+                <input type="text" id="newApplicationInput" placeholder="e.g. Zip Pay">
+                <button class="btn btn-primary" type="button" onclick="addApplicationFromSettings()">
+                  <i class="fas fa-plus"></i> Add
+                </button>
+              </div>
+            </div>
+
+            <div class="data-table-container" style="margin-top:14px;">
+              <table class="data-table">
+                <thead><tr><th>Existing Applications</th></tr></thead>
+                <tbody id="settingsApplicationsList"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Subsection Modal (for existing categories) -->
+    <div id="addSubsectionModal" class="modal">
+      <div class="modal-content" style="max-width:400px;">
+        <div class="modal-header">
+          <h2><i class="fas fa-list"></i> Add Subsection</h2>
+          <button class="close-btn" onclick="closeAddSubsectionModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Adding subsection to: <strong id="addSubsectionCategoryName"></strong></p>
+          <div class="form-group">
+            <label><i class="fas fa-tag"></i> Subsection Name</label>
+            <input type="text" id="addSubsectionInput" placeholder="e.g. Module 1">
+          </div>
+          <button class="btn btn-primary btn-block" type="button" onclick="addSubsectionFromModal()">
+            <i class="fas fa-plus"></i> Add Subsection
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar Event Detail Modal -->
+    <div id="calendarEventModal" class="modal event-detail-modal">
+      <div class="event-detail-content">
+        <div id="eventDetailHeader" class="event-detail-header">
+          <div class="event-header-info">
+            <span id="eventDetailCategory" class="event-category-badge"></span>
+            <h3 id="eventDetailTitle"></h3>
+          </div>
+          <button class="close-btn" onclick="closeCalendarEventModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="event-detail-body">
+          <div class="event-info-grid">
+            <div class="event-info-item">
+              <span class="info-label">Timeline</span>
+              <span id="eventDetailDates" class="info-value"></span>
+            </div>
+            <div class="event-info-item">
+              <span class="info-label">Working Days</span>
+              <span id="eventDetailDays" class="info-value"></span>
+            </div>
+          </div>
+
+          <div class="event-trainees-section">
+            <h4>Participants (<span id="eventTraineeCount">0</span>)</h4>
+            <div id="eventTraineesList" class="event-trainees-list"></div>
+          </div>
+        </div>
+        <div class="event-detail-footer">
+          <button class="btn btn-primary" onclick="closeCalendarEventModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================================================== -->
+    <!-- QUIZ MODULE MODALS -->
+    <!-- ===================================================================================== -->
+
+    <!-- Assign Quiz Modal (Trainer) -->
+    <div id="assignQuizModal" class="modal">
+      <div class="modal-content modal-lg" style="max-width:650px;">
+        <div class="modal-header">
+          <h2><i class="fas fa-clipboard-list"></i> Assign Quiz</h2>
+          <button class="close-btn" onclick="closeAssignQuizModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label><i class="fas fa-laptop"></i> Application</label>
+            <select id="quizApplicationSelect" onchange="onQuizApplicationChange()">
+              <option value="">Select Application</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label><i class="fas fa-hashtag"></i> Test Number</label>
+            <select id="quizTestNumberSelect">
+              <option value="">Select Test Number</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label><i class="fas fa-layer-group"></i> Batch (Optional - filters trainees)</label>
+            <select id="quizBatchSelect" onchange="onQuizBatchChange()">
+              <option value="">Select Batch (Optional)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label><i class="fas fa-calendar"></i> Due Date (Optional)</label>
+            <input type="date" id="quizDueDate">
+          </div>
+
+          <div class="form-group">
+            <label><i class="fas fa-users"></i> Select Trainees</label>
+            <div id="traineeSelectionList" class="trainee-selection-container" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--light-gray); border-radius: var(--border-radius); padding: 10px;">
+              <p style="color: var(--gray-color); text-align: center;">Loading trainees...</p>
+            </div>
+            <p id="selectedTraineesCount" style="margin-top: 8px; font-size: 14px; color: var(--gray-color);">0 trainee(s) selected</p>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="btn btn-outline" onclick="closeAssignQuizModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="assignQuiz()">
+              <i class="fas fa-paper-plane"></i> Assign Quiz
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quiz Taking Modal (Trainee) -->
+    <div id="quizTakingModal" class="modal">
+      <div class="modal-content" style="max-width:800px; max-height:90vh;">
+        <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: white;">
+          <h2 id="quizInfoTitle" style="color: white;"><i class="fas fa-question-circle"></i> Quiz</h2>
+          <div style="display: flex; align-items: center; gap: 20px;">
+            <span id="quizTimer" style="font-size: 18px; font-weight: 600;">00:00</span>
+            <span style="font-size: 14px;">Question <span id="quizCurrentQuestion">1</span> of <span id="quizTotalQuestions">0</span></span>
+          </div>
+        </div>
+        <div class="modal-body" style="padding: 0;">
+          <div id="quizNavigationDots" style="display: flex; flex-wrap: wrap; gap: 8px; padding: 15px; background: var(--background); border-bottom: 1px solid var(--light-gray);"></div>
+          <div id="quizQuestionContainer" style="padding: 25px; min-height: 300px;"></div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; padding: 15px 25px; border-top: 1px solid var(--light-gray);">
+          <button class="btn btn-outline" id="quizPrevBtn" onclick="prevQuizQuestion()">
+            <i class="fas fa-arrow-left"></i> Previous
+          </button>
+          <button class="btn btn-primary" id="quizNextBtn" onclick="nextQuizQuestion()">
+            Next <i class="fas fa-arrow-right"></i>
+          </button>
+          <button class="btn btn-success btn-hidden" id="quizSubmitBtn" onclick="submitQuiz()">
+            <i class="fas fa-check"></i> Submit Quiz
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quiz Results Modal (Trainee) -->
+    <div id="quizResultsModal" class="modal">
+      <div class="modal-content" style="max-width:700px; max-height:90vh;">
+        <div class="modal-header">
+          <h2><i class="fas fa-chart-pie"></i> Quiz Results</h2>
+          <button class="close-btn" onclick="closeQuizResultsModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="result-summary" style="text-align: center; padding: 30px; background: var(--background); border-radius: var(--border-radius-lg); margin-bottom: 20px;">
+            <h3 style="font-size: 48px; margin-bottom: 10px;" id="quizResultScore">0/0</h3>
+            <p id="quizResultPercent" class="result-percent" style="font-size: 24px; font-weight: 600;">0%</p>
+            <p id="quizResultStatus" class="result-status" style="font-size: 18px; margin-top: 10px;">-</p>
+          </div>
+          <div id="quizResultDetails" style="max-height: 300px; overflow-y: auto;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" onclick="closeQuizResultsModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quiz Result Details Modal (Trainer) -->
+    <div id="quizResultDetailsModal" class="modal">
+      <div class="modal-content" style="max-width:750px; max-height:90vh;">
+        <div class="modal-header">
+          <h2><i class="fas fa-file-alt"></i> Quiz Result Details</h2>
+          <button class="close-btn" onclick="closeQuizResultDetailsModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="result-info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+            <div class="info-item">
+              <label style="font-weight: 600; color: var(--gray-color);">Trainee</label>
+              <p id="resultDetailTrainee" style="font-size: 16px;">-</p>
+            </div>
+            <div class="info-item">
+              <label style="font-weight: 600; color: var(--gray-color);">Quiz</label>
+              <p id="resultDetailQuiz" style="font-size: 16px;">-</p>
+            </div>
+            <div class="info-item">
+              <label style="font-weight: 600; color: var(--gray-color);">Score</label>
+              <p id="resultDetailScore" style="font-size: 16px; font-weight: 600;">-</p>
+            </div>
+            <div class="info-item">
+              <label style="font-weight: 600; color: var(--gray-color);">Time Taken</label>
+              <p id="resultDetailTime" style="font-size: 16px;">-</p>
+            </div>
+            <div class="info-item" style="grid-column: span 2;">
+              <label style="font-weight: 600; color: var(--gray-color);">Submitted On</label>
+              <p id="resultDetailDate" style="font-size: 16px;">-</p>
+            </div>
+          </div>
+          <h4 style="margin-bottom: 15px;"><i class="fas fa-list"></i> Answer Details</h4>
+          <div id="resultDetailAnswers" style="max-height: 350px; overflow-y: auto;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" onclick="closeQuizResultDetailsModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Certification Modal -->
+    <div id="addCertificationModal" class="modal">
+      <div class="modal-content" style="max-width:550px;">
+        <div class="modal-header">
+          <h2><i class="fas fa-certificate"></i> Add Certification to Individual</h2>
+          <button class="close-btn" onclick="closeAddCertificationModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label><i class="fas fa-user"></i> Name of the Employee</label>
+            <select id="certEmployeeSelect" onchange="onCertEmployeeChange()">
+              <option value="">Select Employee</option>
+            </select>
+            <small style="color: var(--gray-color); margin-top: 4px; display: block;">Choose from employees registered for training</small>
+          </div>
+          
+          <div class="form-group">
+            <label><i class="fas fa-envelope"></i> Email ID</label>
+            <input type="email" id="certEmployeeEmail" readonly placeholder="Email will auto-populate" style="background: var(--background);">
+          </div>
+          
+          <div class="form-group">
+            <label><i class="fas fa-hashtag"></i> Batch Number</label>
+            <select id="certBatchSelect">
+              <option value="">Select Batch</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label><i class="fas fa-laptop"></i> Application</label>
+            <select id="certApplicationSelect">
+              <option value="">Select Application</option>
+            </select>
+          </div>
+          
+          <div class="form-row" style="display: flex; gap: 15px;">
+            <div class="form-group" style="flex: 1;">
+              <label><i class="fas fa-calendar-plus"></i> Date of Issue</label>
+              <input type="date" id="certIssueDate">
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label><i class="fas fa-calendar-times"></i> Date of Expiry</label>
+              <input type="date" id="certExpiryDate">
+            </div>
+          </div>
+          
+          <div class="modal-footer" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="btn btn-outline" onclick="closeAddCertificationModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="generateCertification()">
+              <i class="fas fa-certificate"></i> Generate Certificate
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+      <div class="loading-spinner">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Loading...</p>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+      <div class="toast-content">
+        <i class="toast-icon"></i>
+        <span class="toast-message"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <?!= include('Scripts'); ?>
+</body>
+</html>

@@ -1,0 +1,4005 @@
+<script>
+  // ==================== GLOBAL VARIABLES ====================
+  let currentUser = null;
+  let userPermissions = null;
+
+  // Calendar
+  let calendarEvents = [];
+  let currentCalendarDate = new Date();
+
+  // Training form
+  let currentTrainingStep = 1;
+  const trainingStore = {
+    applications: [],
+    traineeNames: [],
+    traineeEmails: [],
+    levels: []
+  };
+
+  // Settings cache (dropdowns)
+  let settingsOptionsCache = { categories: [], applications: [] };
+
+  // Current active category for dynamic sections
+  let currentActiveCategory = null;
+
+  // Quiz Module Variables
+  let currentQuizData = null;
+  let quizStartTime = null;
+  let quizTimerInterval = null;
+  let selectedQuizTrainees = [];
+
+  // ==================== UTILITY ====================
+
+  function showLoading(show = true) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (!overlay) return;
+    overlay.classList.toggle('active', show);
+  }
+
+  function showToast(message, type = 'info') {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+
+    const icon = toast.querySelector('.toast-icon');
+    const msg = toast.querySelector('.toast-message');
+
+    toast.className = 'toast ' + type;
+    msg.textContent = message;
+
+    const icons = {
+      success: 'fas fa-check-circle',
+      error: 'fas fa-exclamation-circle',
+      info: 'fas fa-info-circle',
+      warning: 'fas fa-exclamation-triangle'
+    };
+
+    icon.className = 'toast-icon ' + (icons[type] || icons.info);
+    toast.classList.add('show');
+
+    setTimeout(() => toast.classList.remove('show'), 4000);
+  }
+
+  function capitalizeFirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  // ==================== LOGIN ====================
+
+  function togglePassword() {
+    const passwordInput = document.getElementById('password');
+    const toggleIcon = document.getElementById('toggleIcon');
+
+    if (passwordInput.type === 'password') {
+      passwordInput.type = 'text';
+      toggleIcon.classList.remove('fa-eye');
+      toggleIcon.classList.add('fa-eye-slash');
+    } else {
+      passwordInput.type = 'password';
+      toggleIcon.classList.remove('fa-eye-slash');
+      toggleIcon.classList.add('fa-eye');
+    }
+  }
+
+  function handleLogin(event) {
+    event.preventDefault();
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const loginBtn = document.getElementById('loginBtn');
+
+    loginBtn.querySelector('.btn-text').style.display = 'none';
+    loginBtn.querySelector('.btn-loader').style.display = 'inline-block';
+    loginBtn.disabled = true;
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        loginBtn.querySelector('.btn-text').style.display = 'inline';
+        loginBtn.querySelector('.btn-loader').style.display = 'none';
+        loginBtn.disabled = false;
+
+        if (result.success) {
+          currentUser = result.user;
+          showDashboard();
+        } else {
+          showToast(result.message || 'Invalid email or password', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        loginBtn.querySelector('.btn-text').style.display = 'inline';
+        loginBtn.querySelector('.btn-loader').style.display = 'none';
+        loginBtn.disabled = false;
+        showToast('Login failed: ' + error.message, 'error');
+      })
+      .authenticateUser(email, password);
+  }
+
+  function showForgotPassword() {
+    document.getElementById('forgotPasswordModal').classList.add('active');
+  }
+
+  function closeForgotPassword() {
+    document.getElementById('forgotPasswordModal').classList.remove('active');
+    document.getElementById('recoveryEmail').value = '';
+  }
+
+  function handleForgotPassword(event) {
+    event.preventDefault();
+
+    const email = document.getElementById('recoveryEmail').value.trim();
+    const recoveryBtn = document.getElementById('recoveryBtn');
+
+    recoveryBtn.querySelector('.btn-text').style.display = 'none';
+    recoveryBtn.querySelector('.btn-loader').style.display = 'inline-block';
+    recoveryBtn.disabled = true;
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        recoveryBtn.querySelector('.btn-text').style.display = 'inline';
+        recoveryBtn.querySelector('.btn-loader').style.display = 'none';
+        recoveryBtn.disabled = false;
+
+        if (result.success) {
+          showToast('Password sent to your email!', 'success');
+          closeForgotPassword();
+        } else {
+          showToast(result.message || 'Email not found', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        recoveryBtn.querySelector('.btn-text').style.display = 'inline';
+        recoveryBtn.querySelector('.btn-loader').style.display = 'none';
+        recoveryBtn.disabled = false;
+        showToast('Failed to send password: ' + error.message, 'error');
+      })
+      .sendPasswordRecovery(email);
+  }
+
+  function logout() {
+    currentUser = null;
+    userPermissions = null;
+    document.getElementById('dashboardScreen').classList.remove('active');
+    document.getElementById('loginScreen').classList.add('active');
+    document.getElementById('email').value = '';
+    document.getElementById('password').value = '';
+  }
+
+  // ==================== DASHBOARD ====================
+
+  function showDashboard() {
+    document.getElementById('loginScreen').classList.remove('active');
+    document.getElementById('dashboardScreen').classList.add('active');
+
+    document.getElementById('userName').textContent = currentUser.name || currentUser.email;
+    document.getElementById('userTypeBadge').textContent = currentUser.type || 'User';
+
+    // Show/hide Add Training button (hide for trainee)
+    const addTrainingBtn = document.querySelector('.btn-add-training');
+    if (addTrainingBtn) {
+      const userType = (currentUser.type || '').toLowerCase().trim();
+      addTrainingBtn.classList.toggle('btn-hidden', userType === 'trainee');
+    }
+
+    // Settings button visibility (trainer only)
+    updateSettingsButtonVisibility();
+
+    // Load permissions
+    loadUserPermissions();
+
+    // Init calendar
+    populateYearFilter();
+    loadCalendarEvents();
+
+    // Load categories for sidebar
+    loadCategoriesForSidebar();
+  }
+
+  function loadUserPermissions() {
+    google.script.run
+      .withSuccessHandler(function(permissions) {
+        userPermissions = permissions || getDefaultPermissions();
+        applyPermissions();
+      })
+      .withFailureHandler(function(error) {
+        console.error('Failed to load permissions:', error);
+        userPermissions = getDefaultPermissions();
+        applyPermissions();
+      })
+      .getUserPermissions(currentUser.type);
+  }
+
+  function getDefaultPermissions() {
+    return {
+      ilt: { dashboard: false, progress: true, evaluations: true, reports: false },
+      sbl: { dashboard: false, videos: true, evaluations: true, reports: false },
+      compliance: { calendar: true, status: true, reports: true, management: false }
+    };
+  }
+
+  function applyPermissions() {
+    if (!userPermissions) return;
+
+    toggleTabVisibility('iltDashboardTab', userPermissions.ilt.dashboard);
+    toggleTabVisibility('iltProgressTab', userPermissions.ilt.progress);
+    toggleTabVisibility('iltEvaluationsTab', userPermissions.ilt.evaluations);
+    toggleTabVisibility('iltReportsTab', userPermissions.ilt.reports);
+
+    toggleTabVisibility('sblDashboardTab', userPermissions.sbl.dashboard);
+    toggleTabVisibility('sblVideosTab', userPermissions.sbl.videos);
+    toggleTabVisibility('sblEvaluationsTab', userPermissions.sbl.evaluations);
+    toggleTabVisibility('sblReportsTab', userPermissions.sbl.reports);
+
+    toggleTabVisibility('complianceCalendarTab', userPermissions.compliance.calendar);
+    toggleTabVisibility('complianceStatusTab', userPermissions.compliance.status);
+    toggleTabVisibility('complianceReportsTab', userPermissions.compliance.reports);
+    toggleTabVisibility('complianceManagementTab', userPermissions.compliance.management);
+  }
+
+  function toggleTabVisibility(tabId, isVisible) {
+    const tab = document.getElementById(tabId);
+    if (!tab) return;
+
+    if (isVisible) {
+      tab.classList.remove('disabled');
+      tab.style.display = '';
+    } else {
+      tab.classList.add('disabled');
+      tab.style.display = 'none';
+    }
+  }
+
+  // ==================== SIDEBAR CATEGORIES ====================
+
+  // Default categories that always appear in sidebar with their icons
+  const DEFAULT_SIDEBAR_ITEMS = [
+    { name: 'Calendar', icon: 'fa-calendar-alt', section: 'calendar' },
+    { name: 'ILT', icon: 'fa-chalkboard-teacher', section: 'ilt' },
+    { name: 'SBL', icon: 'fa-video', section: 'sbl' },
+    { name: 'Compliance', icon: 'fa-clipboard-check', section: 'compliance' },
+    { name: 'Others', icon: 'fa-ellipsis-h', section: 'others' }
+  ];
+
+  // Map category names to icons
+  const CATEGORY_ICONS = {
+    'ilt': 'fa-chalkboard-teacher',
+    'sbl': 'fa-video',
+    'isms': 'fa-shield-alt',
+    'misc': 'fa-folder',
+    'compliance': 'fa-clipboard-check',
+    'calendar': 'fa-calendar-alt',
+    'others': 'fa-ellipsis-h',
+    'hr': 'fa-users',
+    'sales': 'fa-chart-line',
+    'product': 'fa-box',
+    'technical': 'fa-cogs',
+    'onboarding': 'fa-user-plus',
+    'leadership': 'fa-crown',
+    'soft skills': 'fa-comments',
+    'safety': 'fa-hard-hat'
+  };
+
+  function getCategoryIcon(categoryName) {
+    const lowerName = categoryName.toLowerCase();
+    if (CATEGORY_ICONS[lowerName]) {
+      return CATEGORY_ICONS[lowerName];
+    }
+    // Default icon for custom categories
+    return 'fa-tag';
+  }
+
+  function loadCategoriesForSidebar() {
+    google.script.run
+      .withSuccessHandler(function(opts) {
+        settingsOptionsCache = opts || { categories: [], applications: [] };
+        renderSidebarWithCategories();
+      })
+      .withFailureHandler(function(err) {
+        console.error('Failed to load categories for sidebar:', err);
+        renderSidebarWithCategories();
+      })
+      .getDropdownOptions();
+  }
+
+  function renderSidebarWithCategories() {
+    const container = document.getElementById('categoryMenuContainer');
+    if (!container) return;
+
+    // Get custom categories that are not in the default list
+    const defaultNames = ['ilt', 'sbl', 'isms', 'misc'];
+    const categories = (settingsOptionsCache.categories || []).filter(
+      c => !defaultNames.includes(c.toLowerCase())
+    );
+
+    // Build HTML for ILT, SBL, ISMS, Misc (always shown)
+    let html = '';
+
+    // ILT
+    html += `
+      <div class="menu-item" data-key="ilt" onclick="showSection('ilt')" role="button" tabindex="0">
+        <i class="fas fa-chalkboard-teacher"></i>
+        <span>ILT</span>
+      </div>
+    `;
+
+    // SBL
+    html += `
+      <div class="menu-item" data-key="sbl" onclick="showSection('sbl')" role="button" tabindex="0">
+        <i class="fas fa-video"></i>
+        <span>SBL</span>
+      </div>
+    `;
+
+    // ISMS
+    html += `
+      <div class="menu-item" data-key="isms" onclick="showCategorySection('ISMS')" role="button" tabindex="0">
+        <i class="fas fa-shield-alt"></i>
+        <span>ISMS</span>
+      </div>
+    `;
+
+    // Misc
+    html += `
+      <div class="menu-item" data-key="misc" onclick="showCategorySection('Misc')" role="button" tabindex="0">
+        <i class="fas fa-folder"></i>
+        <span>Misc</span>
+      </div>
+    `;
+
+    // Custom categories
+    categories.forEach(cat => {
+      const icon = getCategoryIcon(cat);
+      html += `
+        <div class="menu-item" data-key="${cat.toLowerCase()}" onclick="showCategorySection('${cat.replace(/'/g, "\\'")}')" role="button" tabindex="0">
+          <i class="fas ${icon}"></i>
+          <span>${cat}</span>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+  }
+
+  // ==================== DYNAMIC CATEGORY SECTIONS ====================
+
+  function showCategorySection(categoryName) {
+    currentActiveCategory = categoryName;
+
+    // Update sidebar active state
+    document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
+    const menuItem = document.querySelector(`.menu-item[data-key="${categoryName.toLowerCase()}"]`);
+    if (menuItem) menuItem.classList.add('active');
+
+    // Hide all sections and show category section
+    document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
+    const categorySection = document.getElementById('categorySection');
+    if (categorySection) categorySection.classList.add('active');
+
+    // Update section header
+    const icon = getCategoryIcon(categoryName);
+    document.getElementById('categorySectionTitle').innerHTML = `<i class="fas ${icon}"></i> ${categoryName} Training`;
+
+    // Load sub-section based on user type
+    const userType = (currentUser?.type || '').toLowerCase().trim();
+    if (userType === 'trainee') {
+      showCategorySubSection('progress', categoryName);
+    } else {
+      showCategorySubSection('dashboard', categoryName);
+    }
+  }
+
+  function showCategorySubSection(subSection, categoryName) {
+    categoryName = categoryName || currentActiveCategory;
+    if (!categoryName) return;
+
+    // Update sub-nav active state
+    document.querySelectorAll('#categorySection .sub-nav-item').forEach(tab => tab.classList.remove('active'));
+    const activeTab = document.getElementById('category' + capitalizeFirst(subSection) + 'Tab');
+    if (activeTab) activeTab.classList.add('active');
+
+    const contentDiv = document.getElementById('categorySectionContent');
+    contentDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></div>';
+
+    const userType = (currentUser?.type || '').toLowerCase().trim();
+
+    switch (subSection) {
+      case 'dashboard':
+        loadCategoryDashboard(categoryName);
+        break;
+      case 'progress':
+        if (userType === 'trainee') {
+          loadCategoryTraineeProgress(categoryName);
+        } else {
+          loadCategoryTrainerProgress(categoryName);
+        }
+        break;
+      case 'evaluations':
+        if (userType === 'trainee') {
+          loadTraineeQuizzes(categoryName);
+        } else {
+          loadTrainerQuizManagement(categoryName);
+        }
+        break;
+      case 'reports':
+        if (userType === 'trainer') {
+          loadQuizTestReports(categoryName);
+        } else {
+          loadCategoryReports(categoryName);
+        }
+        break;
+    }
+  }
+
+  function loadCategoryDashboard(categoryName) {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderCategoryDashboard(categoryName, data);
+      })
+      .withFailureHandler(function(error) {
+        document.getElementById('categorySectionContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getCategoryDashboardData(categoryName);
+  }
+
+  function renderCategoryDashboard(categoryName, data) {
+    const content = document.getElementById('categorySectionContent');
+    const icon = getCategoryIcon(categoryName);
+
+    content.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon blue"><i class="fas ${icon}"></i></div>
+          <div class="stat-info"><h3>${data.totalTrainings || 0}</h3><p>Total Trainings</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i class="fas fa-users"></i></div>
+          <div class="stat-info"><h3>${data.totalTrainees || 0}</h3><p>Total Trainees</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow"><i class="fas fa-calendar-check"></i></div>
+          <div class="stat-info"><h3>${data.upcomingTrainings || 0}</h3><p>Upcoming</p></div>
+        </div>
+      </div>
+
+      ${data.recentTrainings && data.recentTrainings.length > 0 ? `
+        <div class="data-table-container">
+          <table class="data-table">
+            <thead><tr><th>Batch</th><th>Application</th><th>Start Date</th><th>End Date</th><th>Status</th></tr></thead>
+            <tbody>
+              ${data.recentTrainings.map(t => `
+                <tr>
+                  <td>${t.batch || '-'}</td>
+                  <td>${t.application || '-'}</td>
+                  <td>${t.startDate || '-'}</td>
+                  <td>${t.endDate || '-'}</td>
+                  <td><span class="status-badge ${(t.status || 'scheduled').toLowerCase().replace(' ', '-')}">${t.status || 'Scheduled'}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `<div class="empty-state"><i class="fas ${icon}"></i><h3>No ${categoryName} Trainings</h3><p>No training sessions found for this category.</p></div>`}
+    `;
+  }
+
+  function loadCategoryTraineeProgress(categoryName) {
+    const content = document.getElementById('categorySectionContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading your progress...</p></div>';
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderCategoryTraineeProgress(categoryName, data);
+      })
+      .withFailureHandler(function(error) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getCategoryTraineeProgressSummary(currentUser ? currentUser.email : '', categoryName);
+  }
+
+  function renderCategoryTraineeProgress(categoryName, data) {
+    const content = document.getElementById('categorySectionContent');
+    const icon = getCategoryIcon(categoryName);
+
+    if (!data || !data.trainings || data.trainings.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <i class="fas ${icon}"></i>
+          <h3>No Training Progress</h3>
+          <p>You don't have any ${categoryName} training progress to display yet.</p>
+        </div>
+      `;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="progress-header">
+        <h3><i class="fas fa-chart-line"></i> My ${categoryName} Training Progress</h3>
+        <p>Click any training to view day-wise progress</p>
+      </div>
+
+      <div class="trainee-progress-grid">
+        ${data.trainings.map(t => `
+          <div class="training-progress-card" onclick="viewCategoryTraineeDetailedProgress('${t.batch}', '${t.application.replace(/'/g, "\\'")}', '${categoryName.replace(/'/g, "\\'")}')">
+            <div class="training-card-header">
+              <h4>${t.application}</h4>
+              <span class="batch-badge">Batch: ${t.batch}</span>
+            </div>
+            <div class="training-card-body">
+              <div class="training-card-info" style="width:100%">
+                <p><i class="fas fa-layer-group"></i> Level: ${t.level || 'N/A'}</p>
+                <p><i class="fas fa-calendar-alt"></i> ${t.startDate} - ${t.endDate}</p>
+                <p><i class="fas fa-tasks"></i> ${t.completedTopics}/${t.totalTopics} topics completed</p>
+                <p><i class="fas fa-percent"></i> Progress: <strong>${t.progressPercent}%</strong></p>
+              </div>
+            </div>
+            <div class="training-card-footer">
+              <button class="btn btn-sm btn-outline"><i class="fas fa-eye"></i> View Details</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function viewCategoryTraineeDetailedProgress(batch, application, categoryName) {
+    const content = document.getElementById('categorySectionContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading progress details...</p></div>';
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderCategoryTraineeDetailedProgress(batch, application, categoryName, data);
+      })
+      .withFailureHandler(function(error) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getTraineeProgress(currentUser ? currentUser.email : '', application, batch);
+  }
+
+  function renderCategoryTraineeDetailedProgress(batch, application, categoryName, data) {
+    const content = document.getElementById('categorySectionContent');
+
+    const dayGroups = {};
+    (data.progress || []).forEach(p => {
+      if (!dayGroups[p.day]) dayGroups[p.day] = [];
+      dayGroups[p.day].push(p);
+    });
+
+    const sortedDays = Object.keys(dayGroups).sort((a, b) => {
+      const numA = parseInt(String(a).replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(String(b).replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    content.innerHTML = `
+      <div class="progress-detail-header">
+        <button class="btn btn-sm btn-outline" onclick="showCategorySubSection('progress', '${categoryName.replace(/'/g, "\\'")}')">
+          <i class="fas fa-arrow-left"></i> Back to Summary
+        </button>
+        <div class="progress-info">
+          <h3>${application}</h3>
+          <p>Batch: ${batch}</p>
+        </div>
+      </div>
+
+      <div class="day-wise-progress">
+        ${sortedDays.map(day => {
+          const topics = dayGroups[day];
+          const completed = topics.filter(t => t.status === 'Done').length;
+          const total = topics.length;
+          const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+          return `
+            <div class="day-progress-card">
+              <div class="day-header" onclick="toggleDayDetails(this)">
+                <div class="day-info">
+                  <h4><i class="fas fa-calendar-day"></i> ${day}</h4>
+                  <span class="day-stats">${completed}/${total} topics completed</span>
+                </div>
+                <div class="day-progress-bar">
+                  <div class="progress-fill" style="width:${percent}%"></div>
+                </div>
+                <span class="day-percent">${percent}%</span>
+                <i class="fas fa-chevron-down toggle-icon"></i>
+              </div>
+
+              <div class="day-topics" style="display:none;">
+                ${topics.map(t => `
+                  <div class="topic-item ${t.status === 'Done' ? 'completed' : ''}">
+                    <div class="topic-status">
+                      ${t.status === 'Done'
+                        ? '<i class="fas fa-check-circle" style="color:var(--secondary-color)"></i>'
+                        : '<i class="far fa-circle" style="color:var(--light-gray)"></i>'}
+                    </div>
+                    <div class="topic-info">
+                      <span class="topic-name">${t.topic}</span>
+                      ${t.markedDate ? `<span class="topic-date">Completed on ${t.markedDate}</span>` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function toggleDayDetails(header) {
+    const topics = header.nextElementSibling;
+    const icon = header.querySelector('.toggle-icon');
+    
+    if (topics.style.display === 'none') {
+      topics.style.display = 'block';
+      icon.classList.remove('fa-chevron-down');
+      icon.classList.add('fa-chevron-up');
+    } else {
+      topics.style.display = 'none';
+      icon.classList.remove('fa-chevron-up');
+      icon.classList.add('fa-chevron-down');
+    }
+  }
+
+  function loadCategoryTrainerProgress(categoryName) {
+    const content = document.getElementById('categorySectionContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading trainings...</p></div>';
+
+    Promise.all([
+      new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCategoryApplications(categoryName);
+      }),
+      new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCategoryTrainees(categoryName);
+      })
+    ]).then(([applications, trainees]) => {
+      renderCategoryTrainerProgressView(categoryName, applications, trainees);
+      loadCategoryTrainingsWithFilters(categoryName);
+    }).catch(error => {
+      content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+    });
+  }
+
+  function renderCategoryTrainerProgressView(categoryName, applications, trainees) {
+    const content = document.getElementById('categorySectionContent');
+    const icon = getCategoryIcon(categoryName);
+
+    content.innerHTML = `
+      <div class="trainer-progress-container">
+        <div class="progress-header">
+          <h3><i class="fas fa-tasks"></i> ${categoryName} Training Progress Management</h3>
+          <p>Filter trainings and mark topic completion</p>
+        </div>
+
+        <div class="filters-section">
+          <div class="filter-row">
+            <div class="filter-group">
+              <label><i class="fas fa-user"></i> Trainee Name</label>
+              <select id="filterCategoryTraineeName" onchange="loadCategoryTrainingsWithFilters('${categoryName.replace(/'/g, "\\'")}')">
+                <option value="">All Trainees</option>
+                ${(trainees || []).map(t => `<option value="${t.name}">${t.name}</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label><i class="fas fa-laptop"></i> Application</label>
+              <select id="filterCategoryApplication" onchange="loadCategoryTrainingsWithFilters('${categoryName.replace(/'/g, "\\'")}')">
+                <option value="">All Applications</option>
+                ${(applications || []).map(a => `<option value="${a}">${a}</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label><i class="fas fa-calendar"></i> Start Date</label>
+              <input type="date" id="filterCategoryStartDate" onchange="loadCategoryTrainingsWithFilters('${categoryName.replace(/'/g, "\\'")}')">
+            </div>
+
+            <div class="filter-group">
+              <label><i class="fas fa-calendar"></i> End Date</label>
+              <input type="date" id="filterCategoryEndDate" onchange="loadCategoryTrainingsWithFilters('${categoryName.replace(/'/g, "\\'")}')">
+            </div>
+
+            <div class="filter-group filter-actions">
+              <button class="btn btn-sm btn-outline" onclick="clearCategoryProgressFilters('${categoryName.replace(/'/g, "\\'")}')">
+                <i class="fas fa-times"></i> Clear Filters
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="categoryTrainingsListContainer" class="trainings-list-container">
+          <div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading trainings...</p></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function clearCategoryProgressFilters(categoryName) {
+    document.getElementById('filterCategoryTraineeName').value = '';
+    document.getElementById('filterCategoryApplication').value = '';
+    document.getElementById('filterCategoryStartDate').value = '';
+    document.getElementById('filterCategoryEndDate').value = '';
+    loadCategoryTrainingsWithFilters(categoryName);
+  }
+
+  function loadCategoryTrainingsWithFilters(categoryName) {
+    const container = document.getElementById('categoryTrainingsListContainer');
+    container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading trainings...</p></div>';
+
+    const filters = {
+      category: categoryName,
+      traineeName: document.getElementById('filterCategoryTraineeName')?.value || '',
+      application: document.getElementById('filterCategoryApplication')?.value || '',
+      startDate: document.getElementById('filterCategoryStartDate')?.value || '',
+      endDate: document.getElementById('filterCategoryEndDate')?.value || ''
+    };
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderCategoryTrainingsList(categoryName, data);
+      })
+      .withFailureHandler(function(error) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getCategoryTrainingsForTrainer(filters);
+  }
+
+  function renderCategoryTrainingsList(categoryName, data) {
+    const container = document.getElementById('categoryTrainingsListContainer');
+    const icon = getCategoryIcon(categoryName);
+
+    if (!data || !data.trainings || data.trainings.length === 0) {
+      container.innerHTML = `<div class="empty-state"><i class="fas ${icon}"></i><h3>No Trainings Found</h3><p>No ${categoryName} trainings match your filters.</p></div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="trainings-grid">
+        ${data.trainings.map(t => `
+          <div class="training-card" onclick="viewCategoryTraineeProgress('${t.traineeEmail}', '${t.application.replace(/'/g, "\\'")}', '${t.batch}', '${categoryName.replace(/'/g, "\\'")}')">
+            <div class="training-card-header">
+              <h4>${t.application}</h4>
+              <span class="batch-badge">Batch: ${t.batch}</span>
+            </div>
+            <div class="training-card-body">
+              <div class="training-card-info">
+                <p><i class="fas fa-user"></i> ${t.traineeName}</p>
+                <p><i class="fas fa-envelope"></i> ${t.traineeEmail}</p>
+                <p><i class="fas fa-layer-group"></i> Level: ${t.level || 'N/A'}</p>
+                <p><i class="fas fa-calendar"></i> ${t.startDate} - ${t.endDate}</p>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function viewCategoryTraineeProgress(traineeEmail, application, batch, categoryName) {
+    const container = document.getElementById('categoryTrainingsListContainer');
+    container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading progress...</p></div>';
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderCategoryTraineeProgressForTrainer(traineeEmail, application, batch, categoryName, data);
+      })
+      .withFailureHandler(function(error) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getTraineeProgress(traineeEmail, application, batch);
+  }
+
+  function renderCategoryTraineeProgressForTrainer(traineeEmail, application, batch, categoryName, data) {
+    const container = document.getElementById('categoryTrainingsListContainer');
+
+    const dayGroups = {};
+    (data.progress || []).forEach(p => {
+      if (!dayGroups[p.day]) dayGroups[p.day] = [];
+      dayGroups[p.day].push(p);
+    });
+
+    const sortedDays = Object.keys(dayGroups).sort((a, b) => {
+      const numA = parseInt(String(a).replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(String(b).replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    container.innerHTML = `
+      <div class="progress-detail-view">
+        <div class="progress-detail-header">
+          <button class="btn btn-sm btn-outline" onclick="loadCategoryTrainingsWithFilters('${categoryName.replace(/'/g, "\\'")}')">
+            <i class="fas fa-arrow-left"></i> Back to List
+          </button>
+          <div class="progress-info">
+            <h3>${application}</h3>
+            <p>Trainee: ${traineeEmail} | Batch: ${batch}</p>
+          </div>
+        </div>
+
+        <div class="progress-topics-list">
+          ${sortedDays.map(day => `
+            <div class="day-section">
+              <h4 class="day-title"><i class="fas fa-calendar-day"></i> ${day}</h4>
+              <div class="topics-grid">
+                ${dayGroups[day].map(topic => `
+                  <div class="topic-card ${topic.status === 'Done' ? 'completed' : ''}">
+                    <div class="topic-content">
+                      <span class="topic-name">${topic.topic}</span>
+                      ${topic.markedDate ? `<span class="topic-meta">Marked by ${topic.markedBy} on ${topic.markedDate}</span>` : ''}
+                    </div>
+                    <div class="topic-actions">
+                      <button class="btn btn-sm ${topic.status === 'Done' ? 'btn-success' : 'btn-outline'}"
+                        onclick="toggleCategoryTopicStatus('${traineeEmail}', '${application.replace(/'/g, "\\'")}', '${batch}', '${day}', '${topic.topic.replace(/'/g, "\\'")}', '${topic.status === 'Done' ? 'Not Done' : 'Done'}', '${categoryName.replace(/'/g, "\\'")}')">
+                        <i class="fas ${topic.status === 'Done' ? 'fa-check' : 'fa-circle'}"></i>
+                        ${topic.status === 'Done' ? 'Done' : 'Mark Done'}
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function toggleCategoryTopicStatus(traineeEmail, application, batch, day, topic, newStatus, categoryName) {
+    showLoading(true);
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        showLoading(false);
+        if (result.success) {
+          showToast(result.message, 'success');
+          viewCategoryTraineeProgress(traineeEmail, application, batch, categoryName);
+        } else {
+          showToast(result.message || 'Failed to update status', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .markTopicStatus(traineeEmail, application, batch, day, topic, newStatus, currentUser?.email || '');
+  }
+
+  function loadCategoryEvaluations(categoryName) {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderCategoryEvaluations(categoryName, data);
+      })
+      .withFailureHandler(function(error) {
+        document.getElementById('categorySectionContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getCategoryEvaluationsData(categoryName, currentUser ? currentUser.email : '');
+  }
+
+  function renderCategoryEvaluations(categoryName, data) {
+    const content = document.getElementById('categorySectionContent');
+    const icon = getCategoryIcon(categoryName);
+
+    if (!data || !data.evaluations || data.evaluations.length === 0) {
+      content.innerHTML = `<div class="empty-state"><i class="fas fa-star"></i><h3>No Evaluations</h3><p>No ${categoryName} evaluations available yet.</p></div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead><tr><th>Training</th><th>Date</th><th>Score</th><th>Evaluator</th><th>Status</th></tr></thead>
+          <tbody>
+            ${data.evaluations.map(e => `
+              <tr>
+                <td>${e.training || '-'}</td>
+                <td>${e.date || '-'}</td>
+                <td>${e.score || '-'}</td>
+                <td>${e.evaluator || '-'}</td>
+                <td><span class="status-badge ${(e.status || 'pending').toLowerCase()}">${e.status || 'Pending'}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function loadCategoryReports(categoryName) {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderCategoryReports(categoryName, data);
+      })
+      .withFailureHandler(function(error) {
+        document.getElementById('categorySectionContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getCategoryReportsData(categoryName);
+  }
+
+  function renderCategoryReports(categoryName, data) {
+    const content = document.getElementById('categorySectionContent');
+    const icon = getCategoryIcon(categoryName);
+
+    if (!data || !data.certifications || data.certifications.length === 0) {
+      content.innerHTML = `<div class="empty-state"><i class="fas fa-certificate"></i><h3>No Certifications</h3><p>No ${categoryName} certifications available yet.</p></div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead><tr><th>Trainee</th><th>Training</th><th>Cert Date</th><th>Expiry</th><th>Status</th></tr></thead>
+          <tbody>
+            ${data.certifications.map(c => `
+              <tr>
+                <td>${c.trainee || '-'}</td>
+                <td>${c.training || '-'}</td>
+                <td>${c.certDate || '-'}</td>
+                <td>${c.expiryDate || '-'}</td>
+                <td><span class="status-badge ${(c.status || 'active').toLowerCase()}">${c.status || 'Active'}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // ==================== NAVIGATION ====================
+
+  function showSection(sectionName) {
+    currentActiveCategory = null;
+
+    document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
+
+    document.querySelectorAll('.menu-item').forEach(item => {
+      const itemText = item.querySelector('span');
+      if (itemText && itemText.textContent.toLowerCase() === sectionName.toLowerCase()) {
+        item.classList.add('active');
+      }
+    });
+
+    document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
+
+    const section = document.getElementById(sectionName + 'Section');
+    if (section) section.classList.add('active');
+
+    switch (sectionName) {
+      case 'calendar': loadCalendarEvents(); break;
+      case 'ilt': loadILTSection(); break;
+      case 'sbl': loadSBLSection(); break;
+      case 'compliance': loadComplianceSection(); break;
+      case 'others': loadOthersSection(); break;
+    }
+  }
+
+  // ==================== CALENDAR ====================
+
+  function populateYearFilter() {
+    const yearSelect = document.getElementById('jumpYear');
+    const currentYear = new Date().getFullYear();
+    yearSelect.innerHTML = '';
+
+    for (let y = currentYear - 5; y <= currentYear + 5; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = currentYear;
+  }
+
+  function loadCalendarEvents() {
+    showLoading(true);
+
+    const userEmail = currentUser ? currentUser.email : '';
+    const userType = currentUser ? currentUser.type : '';
+
+    google.script.run
+      .withSuccessHandler(function(events) {
+        calendarEvents = events || [];
+        renderCalendar();
+        showLoading(false);
+      })
+      .withFailureHandler(function(error) {
+        console.error('Failed to load calendar events:', error);
+        calendarEvents = [];
+        renderCalendar();
+        showLoading(false);
+        showToast('Failed to load calendar events', 'error');
+      })
+      .getCalendarEvents(userEmail, userType);
+  }
+
+  function renderCalendar() {
+    const grid = document.getElementById('calendarGrid');
+    const monthLabel = document.getElementById('calendarMonthLabel');
+    const jumpMonth = document.getElementById('jumpMonth');
+    const jumpYear = document.getElementById('jumpYear');
+
+    const year = currentCalendarDate.getFullYear();
+    const month = currentCalendarDate.getMonth();
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+
+    monthLabel.textContent = `${monthNames[month]} ${year}`;
+    jumpMonth.value = month;
+    jumpYear.value = year;
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDayOfWeek = firstDay.getDay();
+    const daysInMonth = lastDay.getDate();
+
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    let html = '';
+
+    // Empty cells before first day
+    for (let i = 0; i < startDayOfWeek; i++) {
+      html += '<div class="calendar-day empty"></div>';
+    }
+
+    // Days of month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const isToday = dateStr === todayStr;
+      const dayEvents = getEventsForDate(dateStr);
+
+      html += `<div class="calendar-day${isToday ? ' today' : ''}${dayEvents.length > 0 ? ' has-events' : ''}" onclick="showDayEvents('${dateStr}')">`;
+      html += `<span class="day-number">${day}</span>`;
+
+      if (dayEvents.length > 0) {
+        html += '<div class="day-events">';
+        dayEvents.slice(0, 3).forEach(event => {
+          const categoryClass = (event.category || 'misc').toLowerCase();
+          html += `<div class="event-dot ${categoryClass}" title="${event.application}"></div>`;
+        });
+        if (dayEvents.length > 3) {
+          html += `<span class="more-events">+${dayEvents.length - 3}</span>`;
+        }
+        html += '</div>';
+      }
+
+      html += '</div>';
+    }
+
+    grid.innerHTML = html;
+  }
+
+  function getEventsForDate(dateStr) {
+    return calendarEvents.filter(event => {
+      const start = new Date(event.startDate);
+      const end = new Date(event.endDate);
+      const check = new Date(dateStr);
+      return check >= start && check <= end;
+    });
+  }
+
+  function changeCalendarMonth(delta) {
+    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+    renderCalendar();
+  }
+
+  function goToToday() {
+    currentCalendarDate = new Date();
+    renderCalendar();
+  }
+
+  function jumpToDate() {
+    const month = parseInt(document.getElementById('jumpMonth').value);
+    const year = parseInt(document.getElementById('jumpYear').value);
+    currentCalendarDate = new Date(year, month, 1);
+    renderCalendar();
+  }
+
+  function showDayEvents(dateStr) {
+    const dayEvents = getEventsForDate(dateStr);
+    if (dayEvents.length === 0) return;
+
+    if (dayEvents.length === 1) {
+      showEventDetail(dayEvents[0]);
+    } else {
+      // Show first event for now (could implement a list view)
+      showEventDetail(dayEvents[0]);
+    }
+  }
+
+  function showEventDetail(event) {
+    const modal = document.getElementById('calendarEventModal');
+    const header = document.getElementById('eventDetailHeader');
+    const categoryBadge = document.getElementById('eventDetailCategory');
+    const title = document.getElementById('eventDetailTitle');
+    const dates = document.getElementById('eventDetailDates');
+    const days = document.getElementById('eventDetailDays');
+    const traineeCount = document.getElementById('eventTraineeCount');
+    const traineesList = document.getElementById('eventTraineesList');
+
+    const categoryClass = (event.category || 'misc').toLowerCase();
+    header.className = 'event-detail-header ' + categoryClass;
+
+    categoryBadge.textContent = event.category || 'Training';
+    title.textContent = event.application || 'Training Session';
+    dates.textContent = `${event.startDate} - ${event.endDate}`;
+    days.textContent = `${event.duration || 0} days`;
+    traineeCount.textContent = event.trainees ? event.trainees.length : 0;
+
+    if (event.trainees && event.trainees.length > 0) {
+      traineesList.innerHTML = event.trainees.map(t => `
+        <div class="event-trainee-item">
+          <div class="event-trainee-avatar">${(t.name || 'U').charAt(0).toUpperCase()}</div>
+          <div class="event-trainee-info">
+            <h5>${t.name || 'Unknown'}</h5>
+            <p>${t.email || ''} • ${t.level || 'N/A'}</p>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      traineesList.innerHTML = '<p style="color: var(--gray-color); text-align: center;">No trainees assigned</p>';
+    }
+
+    modal.classList.add('active');
+  }
+
+  function closeCalendarEventModal() {
+    document.getElementById('calendarEventModal').classList.remove('active');
+  }
+
+  // ==================== SETTINGS ====================
+
+  function updateSettingsButtonVisibility() {
+    const btn = document.getElementById('settingsBtn');
+    if (!btn) return;
+
+    const userType = (currentUser?.type || '').toLowerCase().trim();
+    btn.classList.toggle('btn-hidden', userType !== 'trainer');
+  }
+
+  function openSettingsModal() {
+    document.getElementById('settingsModal').classList.add('active');
+    switchSettingsTab('category');
+    loadSettingsOptionsAndRender();
+  }
+
+  function closeSettingsModal() {
+    document.getElementById('settingsModal').classList.remove('active');
+  }
+
+  function switchSettingsTab(tab) {
+    const catBtn = document.getElementById('settingsTabCategory');
+    const appBtn = document.getElementById('settingsTabApplication');
+    const catPanel = document.getElementById('settingsPanelCategory');
+    const appPanel = document.getElementById('settingsPanelApplication');
+
+    if (tab === 'category') {
+      catBtn.classList.add('btn-primary');
+      catBtn.classList.remove('btn-outline');
+      appBtn.classList.remove('btn-primary');
+      appBtn.classList.add('btn-outline');
+      catPanel.style.display = 'block';
+      appPanel.style.display = 'none';
+    } else {
+      appBtn.classList.add('btn-primary');
+      appBtn.classList.remove('btn-outline');
+      catBtn.classList.remove('btn-primary');
+      catBtn.classList.add('btn-outline');
+      appPanel.style.display = 'block';
+      catPanel.style.display = 'none';
+    }
+  }
+
+  function loadSettingsOptionsAndRender() {
+    google.script.run
+      .withSuccessHandler(function(opts) {
+        settingsOptionsCache = opts || { categories: [], applications: [] };
+        renderSettingsTables();
+        refreshTrainingDropdownsFromCache();
+        // Also update sidebar when settings change
+        renderSidebarWithCategories();
+      })
+      .withFailureHandler(function(err) {
+        console.error('Failed to load settings options:', err);
+      })
+      .getDropdownOptions();
+  }
+
+  function renderSettingsTables() {
+    const catTbody = document.getElementById('settingsCategoriesList');
+    const appTbody = document.getElementById('settingsApplicationsList');
+
+    catTbody.innerHTML = (settingsOptionsCache.categories || [])
+      .map(c => `
+        <tr>
+          <td>${c}</td>
+          <td style="width:60px; text-align:center;">
+            <button class="btn btn-sm" style="background:var(--danger-color); color:white; padding:4px 8px;" onclick="deleteCategoryFromSettings('${c.replace(/'/g, "\\'")}')">
+              <i class="fas fa-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+
+    appTbody.innerHTML = (settingsOptionsCache.applications || [])
+      .map(a => `
+        <tr>
+          <td>${a}</td>
+          <td style="width:60px; text-align:center;">
+            <button class="btn btn-sm" style="background:var(--danger-color); color:white; padding:4px 8px;" onclick="deleteApplicationFromSettings('${a.replace(/'/g, "\\'")}')">
+              <i class="fas fa-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+  }
+
+  function refreshTrainingDropdownsFromCache() {
+    const catSelect = document.getElementById('trainingCategory');
+    const appSelect = document.getElementById('appInput');
+    if (!catSelect || !appSelect) return;
+
+    const currentCat = catSelect.value;
+    const currentApp = appSelect.value;
+
+    catSelect.innerHTML = `<option value="">Select Category</option>` +
+      (settingsOptionsCache.categories || []).map(c => `<option value="${c}">${c}</option>`).join('');
+    if (currentCat) catSelect.value = currentCat;
+
+    appSelect.innerHTML = `<option value="">Select an application</option>` +
+      (settingsOptionsCache.applications || []).map(a => `<option value="${a}">${a}</option>`).join('');
+    if (currentApp) appSelect.value = currentApp;
+  }
+
+  function refreshTrainingDropdowns() {
+    google.script.run
+      .withSuccessHandler(function(opts) {
+        settingsOptionsCache = opts || { categories: [], applications: [] };
+        refreshTrainingDropdownsFromCache();
+      })
+      .withFailureHandler(function(err) {
+        console.error('Failed to refresh dropdowns:', err);
+      })
+      .getDropdownOptions();
+  }
+
+  function addCategoryFromSettings() {
+    const input = document.getElementById('newCategoryInput');
+    const value = (input?.value || '').trim();
+    if (!value) { showToast('Please enter a category', 'warning'); return; }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res.success) {
+          showToast(res.message, 'success');
+          input.value = '';
+          loadSettingsOptionsAndRender();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        showToast('Error: ' + err.message, 'error');
+      })
+      .addTrainingCategoryOption(value, currentUser?.email || '');
+  }
+
+  function addApplicationFromSettings() {
+    const input = document.getElementById('newApplicationInput');
+    const value = (input?.value || '').trim();
+    if (!value) { showToast('Please enter an application', 'warning'); return; }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res.success) {
+          showToast(res.message, 'success');
+          input.value = '';
+          loadSettingsOptionsAndRender();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        showToast('Error: ' + err.message, 'error');
+      })
+      .addApplicationOption(value, currentUser?.email || '');
+  }
+
+  function deleteCategoryFromSettings(category) {
+    if (!confirm(`Are you sure you want to delete the category "${category}"?`)) return;
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res.success) {
+          showToast(res.message, 'success');
+          loadSettingsOptionsAndRender();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        showToast('Error: ' + err.message, 'error');
+      })
+      .deleteTrainingCategoryOption(category, currentUser?.email || '');
+  }
+
+  function deleteApplicationFromSettings(application) {
+    if (!confirm(`Are you sure you want to delete the application "${application}"?`)) return;
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res.success) {
+          showToast(res.message, 'success');
+          loadSettingsOptionsAndRender();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        showToast('Error: ' + err.message, 'error');
+      })
+      .deleteApplicationOption(application, currentUser?.email || '');
+  }
+
+  // ==================== ADD TRAINING MODAL ====================
+
+  function openAddTrainingModal() {
+    document.getElementById('addTrainingModal').classList.add('active');
+    resetTrainingForm();
+    refreshTrainingDropdowns();
+    loadNextBatchNumber();
+  }
+
+  function closeAddTrainingModal() {
+    document.getElementById('addTrainingModal').classList.remove('active');
+    resetTrainingForm();
+  }
+
+  function resetTrainingForm() {
+    currentTrainingStep = 1;
+    trainingStore.applications = [];
+    trainingStore.traineeNames = [];
+    trainingStore.traineeEmails = [];
+    trainingStore.levels = [];
+
+    document.getElementById('batchCount').value = '';
+    document.getElementById('trainingCategory').value = '';
+    document.getElementById('appInput').value = '';
+    document.getElementById('traineeNameInput').value = '';
+    document.getElementById('traineeEmailInput').value = '';
+    document.getElementById('trainingStartDate').value = '';
+    document.getElementById('trainingEndDate').value = '';
+    document.getElementById('offsetIntermediate').value = '30';
+    document.getElementById('offsetAdvanced').value = '60';
+
+    document.getElementById('applicationChips').innerHTML = '';
+    document.getElementById('levelChips').innerHTML = '';
+    document.getElementById('traineesList').innerHTML = '';
+    document.getElementById('noTraineesMsg').style.display = 'block';
+    document.getElementById('saveTrainingBtn').disabled = true;
+
+    showTrainingStep(1);
+  }
+
+  function loadNextBatchNumber() {
+    google.script.run
+      .withSuccessHandler(function(batchNum) {
+        document.getElementById('batchCount').value = batchNum;
+        validateTrainingForm();
+      })
+      .withFailureHandler(function(error) {
+        console.error('Failed to load batch number:', error);
+      })
+      .getNextBatchNumber(document.getElementById('trainingCategory') ? document.getElementById('trainingCategory').value || 'ILT' : 'ILT');
+  }
+
+  function showTrainingStep(step) {
+    currentTrainingStep = step;
+
+    document.querySelectorAll('.step-indicator').forEach((indicator, index) => {
+      indicator.classList.toggle('active', index < step);
+    });
+
+    document.querySelectorAll('.form-step').forEach((formStep, index) => {
+      formStep.classList.toggle('active', index === step - 1);
+    });
+
+    document.getElementById('prevStepBtn').classList.toggle('btn-hidden', step === 1);
+    document.getElementById('nextStepBtn').classList.toggle('btn-hidden', step === 3);
+    document.getElementById('saveTrainingBtn').classList.toggle('btn-hidden', step !== 3);
+  }
+
+  function nextTrainingStep() {
+    if (currentTrainingStep < 3) {
+      showTrainingStep(currentTrainingStep + 1);
+    }
+  }
+
+  function prevTrainingStep() {
+    if (currentTrainingStep > 1) {
+      showTrainingStep(currentTrainingStep - 1);
+    }
+  }
+
+  function addChip(value, storeKey, containerId) {
+    if (!value || trainingStore[storeKey].includes(value)) return;
+
+    trainingStore[storeKey].push(value);
+
+    const container = document.getElementById(containerId);
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `
+      ${value}
+      <button type="button" onclick="removeChip('${value.replace(/'/g, "\\'")}', '${storeKey}', this)">
+        <i class="fas fa-times"></i>
+      </button>
+    `;
+    container.appendChild(chip);
+    validateTrainingForm();
+  }
+
+  function addApplication() {
+    const select = document.getElementById('appInput');
+    const value = select.value;
+    if (value) {
+      addChip(value, 'applications', 'applicationChips');
+      select.value = '';
+    }
+  }
+
+  function addLevel(level) {
+    addChip(level, 'levels', 'levelChips');
+  }
+
+  function removeChip(value, storeKey, btn) {
+    trainingStore[storeKey] = trainingStore[storeKey].filter(v => v !== value);
+    btn.closest('.chip').remove();
+    validateTrainingForm();
+  }
+
+  function addTrainee() {
+    const nameInput = document.getElementById('traineeNameInput');
+    const emailInput = document.getElementById('traineeEmailInput');
+
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim().toLowerCase();
+
+    if (!name || !email) {
+      showToast('Please enter both name and email', 'warning');
+      return;
+    }
+
+    if (trainingStore.traineeEmails.includes(email)) {
+      showToast('This email is already added', 'warning');
+      return;
+    }
+
+    trainingStore.traineeNames.push(name);
+    trainingStore.traineeEmails.push(email);
+
+    renderTraineeCard(name, email);
+
+    nameInput.value = '';
+    emailInput.value = '';
+    document.getElementById('noTraineesMsg').style.display = 'none';
+    validateTrainingForm();
+  }
+
+  function renderTraineeCard(name, email) {
+    const container = document.getElementById('traineesList');
+    const card = document.createElement('div');
+    card.className = 'trainee-card';
+    card.innerHTML = `
+      <div class="trainee-info">
+        <div class="trainee-avatar">${name.charAt(0).toUpperCase()}</div>
+        <div class="trainee-details">
+          <h4>${name}</h4>
+          <p>${email}</p>
+        </div>
+      </div>
+      <button class="remove-trainee" onclick="removeTrainee('${email}', this)">
+        <i class="fas fa-trash"></i>
+      </button>
+    `;
+    container.appendChild(card);
+  }
+
+  function removeTrainee(email, btn) {
+    const index = trainingStore.traineeEmails.indexOf(email);
+    if (index > -1) {
+      trainingStore.traineeEmails.splice(index, 1);
+      trainingStore.traineeNames.splice(index, 1);
+    }
+    btn.closest('.trainee-card').remove();
+
+    if (trainingStore.traineeEmails.length === 0) {
+      document.getElementById('noTraineesMsg').style.display = 'block';
+    }
+    validateTrainingForm();
+  }
+
+  function validateTrainingForm() {
+    const isValid =
+      document.getElementById('batchCount').value.trim() !== '' &&
+      document.getElementById('trainingCategory').value !== '' &&
+      trainingStore.applications.length > 0 &&
+      trainingStore.traineeNames.length > 0 &&
+      trainingStore.traineeEmails.length > 0 &&
+      trainingStore.levels.length > 0 &&
+      document.getElementById('trainingStartDate').value !== '' &&
+      document.getElementById('trainingEndDate').value !== '';
+
+    document.getElementById('saveTrainingBtn').disabled = !isValid;
+    return isValid;
+  }
+
+  function saveTraining() {
+    if (!validateTrainingForm()) {
+      showToast('Please fill in all required fields', 'warning');
+      return;
+    }
+
+    showLoading(true);
+
+    const trainingData = {
+      batchCount: document.getElementById('batchCount').value.trim(),
+      category: document.getElementById('trainingCategory').value,
+      applications: trainingStore.applications,
+      traineeNames: trainingStore.traineeNames,
+      traineeEmails: trainingStore.traineeEmails,
+      levels: trainingStore.levels,
+      startDate: document.getElementById('trainingStartDate').value,
+      endDate: document.getElementById('trainingEndDate').value,
+      offsetIntermediate: parseInt(document.getElementById('offsetIntermediate').value) || 30,
+      offsetAdvanced: parseInt(document.getElementById('offsetAdvanced').value) || 60
+    };
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          // Create progress entries
+          google.script.run
+            .withSuccessHandler(function() {
+              showLoading(false);
+              showToast('Training saved successfully!', 'success');
+              closeAddTrainingModal();
+              loadCalendarEvents();
+            })
+            .withFailureHandler(function(error) {
+              showLoading(false);
+              showToast('Training saved but progress entries failed: ' + error.message, 'warning');
+              closeAddTrainingModal();
+              loadCalendarEvents();
+            })
+            .createProgressEntries(trainingData);
+        } else {
+          showLoading(false);
+          showToast(result.message || 'Failed to save training', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Failed to save training: ' + error.message, 'error');
+      })
+      .saveTrainingData(trainingData);
+  }
+
+  // ==================== ILT SECTION ====================
+
+  function loadILTSection() {
+    const tabs = ['dashboard', 'progress', 'evaluations', 'reports'];
+    let firstVisibleTab = 'dashboard';
+
+    if (userPermissions && userPermissions.ilt) {
+      for (const tab of tabs) {
+        if (userPermissions.ilt[tab]) { firstVisibleTab = tab; break; }
+      }
+    }
+    showILTSubSection(firstVisibleTab);
+  }
+
+  function showILTSubSection(subSection) {
+    document.querySelectorAll('#iltSection .sub-nav-item').forEach(tab => tab.classList.remove('active'));
+    const activeTab = document.getElementById('ilt' + capitalizeFirst(subSection) + 'Tab');
+    if (activeTab) activeTab.classList.add('active');
+
+    const contentDiv = document.getElementById('iltContent');
+    contentDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></div>';
+
+    const userType = (currentUser?.type || '').toLowerCase().trim();
+
+    switch (subSection) {
+      case 'dashboard': loadILTDashboard(); break;
+      case 'progress':
+        if (userType === 'trainee') {
+          loadTraineeProgressView();
+        } else {
+          loadTrainerProgressView();
+        }
+        break;
+      case 'evaluations':
+        if (userType === 'trainee') {
+          loadTraineeQuizzesILT();
+        } else {
+          loadTrainerQuizManagementILT();
+        }
+        break;
+      case 'reports':
+        if (userType === 'trainer') {
+          loadQuizTestReportsILT();
+        } else {
+          loadILTReports();
+        }
+        break;
+    }
+  }
+
+  function loadILTDashboard() {
+    google.script.run
+      .withSuccessHandler(renderILTDashboard)
+      .withFailureHandler(function(error) {
+        document.getElementById('iltContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getILTDashboardData();
+  }
+
+  function renderILTDashboard(data) {
+    const content = document.getElementById('iltContent');
+    content.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon blue"><i class="fas fa-chalkboard-teacher"></i></div>
+          <div class="stat-info"><h3>${data.totalTrainings || 0}</h3><p>Total Trainings</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i class="fas fa-users"></i></div>
+          <div class="stat-info"><h3>${data.totalTrainees || 0}</h3><p>Total Trainees</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow"><i class="fas fa-calendar-check"></i></div>
+          <div class="stat-info"><h3>${data.upcomingTrainings || 0}</h3><p>Upcoming</p></div>
+        </div>
+      </div>
+
+      ${data.recentTrainings && data.recentTrainings.length > 0 ? `
+        <div class="data-table-container">
+          <table class="data-table">
+            <thead><tr><th>Training</th><th>Category</th><th>Start Date</th><th>End Date</th><th>Status</th></tr></thead>
+            <tbody>
+              ${data.recentTrainings.map(t => `
+                <tr>
+                  <td>${t.name || '-'}</td>
+                  <td>${t.category || '-'}</td>
+                  <td>${t.startDate || '-'}</td>
+                  <td>${t.endDate || '-'}</td>
+                  <td><span class="status-badge ${(t.status || 'scheduled').toLowerCase().replace(' ', '-')}">${t.status || 'Scheduled'}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>No Recent Trainings</h3><p>No training sessions found.</p></div>'}
+    `;
+  }
+
+  // ==================== Trainee progress view ====================
+
+  function loadTraineeProgressView() {
+    const content = document.getElementById('iltContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading your progress...</p></div>';
+
+    google.script.run
+      .withSuccessHandler(renderTraineeProgressSummary)
+      .withFailureHandler(function(error) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getTraineeProgressSummary(currentUser ? currentUser.email : '');
+  }
+
+  function renderTraineeProgressSummary(data) {
+    const content = document.getElementById('iltContent');
+
+    if (!data || !data.trainings || data.trainings.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-clipboard-list"></i>
+          <h3>No Training Progress</h3>
+          <p>You don't have any training progress to display yet.</p>
+        </div>
+      `;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="progress-header">
+        <h3><i class="fas fa-chart-line"></i> My Training Progress</h3>
+        <p>Click any training to view day-wise progress</p>
+      </div>
+
+      <div class="trainee-progress-grid">
+        ${data.trainings.map(t => `
+          <div class="training-progress-card" onclick="viewTraineeDetailedProgress('${t.batch}', '${t.application.replace(/'/g, "\\'")}')" >
+            <div class="training-card-header">
+              <h4>${t.application}</h4>
+              <span class="batch-badge">Batch: ${t.batch}</span>
+            </div>
+            <div class="training-card-body">
+              <div class="training-card-info" style="width:100%">
+                <p><i class="fas fa-layer-group"></i> Level: ${t.level || 'N/A'}</p>
+                <p><i class="fas fa-calendar-alt"></i> ${t.startDate} - ${t.endDate}</p>
+                <p><i class="fas fa-tasks"></i> ${t.completedTopics}/${t.totalTopics} topics completed</p>
+                <p><i class="fas fa-percent"></i> Progress: <strong>${t.progressPercent}%</strong></p>
+              </div>
+            </div>
+            <div class="training-card-footer">
+              <button class="btn btn-sm btn-outline"><i class="fas fa-eye"></i> View Details</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function viewTraineeDetailedProgress(batch, application) {
+    const content = document.getElementById('iltContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading progress details...</p></div>';
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderTraineeDetailedProgress(batch, application, data);
+      })
+      .withFailureHandler(function(error) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getTraineeProgress(currentUser ? currentUser.email : '', application, batch);
+  }
+
+  function renderTraineeDetailedProgress(batch, application, data) {
+    const content = document.getElementById('iltContent');
+
+    const dayGroups = {};
+    (data.progress || []).forEach(p => {
+      if (!dayGroups[p.day]) dayGroups[p.day] = [];
+      dayGroups[p.day].push(p);
+    });
+
+    const sortedDays = Object.keys(dayGroups).sort((a, b) => {
+      const numA = parseInt(String(a).replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(String(b).replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    content.innerHTML = `
+      <div class="progress-detail-header">
+        <button class="btn btn-sm btn-outline" onclick="loadTraineeProgressView()">
+          <i class="fas fa-arrow-left"></i> Back to Summary
+        </button>
+        <div class="progress-info">
+          <h3>${application}</h3>
+          <p>Batch: ${batch}</p>
+        </div>
+      </div>
+
+      <div class="day-wise-progress">
+        ${sortedDays.map(day => {
+          const topics = dayGroups[day];
+          const completed = topics.filter(t => t.status === 'Done').length;
+          const total = topics.length;
+          const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+          return `
+            <div class="day-progress-card">
+              <div class="day-header" onclick="toggleDayDetails(this)">
+                <div class="day-info">
+                  <h4><i class="fas fa-calendar-day"></i> ${day}</h4>
+                  <span class="day-stats">${completed}/${total} topics completed</span>
+                </div>
+                <div class="day-progress-bar">
+                  <div class="progress-fill" style="width:${percent}%"></div>
+                </div>
+                <span class="day-percent">${percent}%</span>
+                <i class="fas fa-chevron-down toggle-icon"></i>
+              </div>
+
+              <div class="day-topics" style="display:none;">
+                ${topics.map(t => `
+                  <div class="topic-item ${t.status === 'Done' ? 'completed' : ''}">
+                    <div class="topic-status">
+                      ${t.status === 'Done'
+                        ? '<i class="fas fa-check-circle" style="color:var(--secondary-color)"></i>'
+                        : '<i class="far fa-circle" style="color:var(--light-gray)"></i>'}
+                    </div>
+                    <div class="topic-info">
+                      <span class="topic-name">${t.topic}</span>
+                      ${t.markedDate ? `<span class="topic-date">Completed on ${t.markedDate}</span>` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  // ==================== Trainer progress view ====================
+
+  let selectedTrainingForProgress = null;
+
+  function loadTrainerProgressView() {
+    const content = document.getElementById('iltContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading trainings...</p></div>';
+
+    Promise.all([
+      new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getDropdownOptions();
+      })
+    ]).then(([options]) => {
+      renderTrainerProgressView(options);
+      loadTrainingsWithFilters();
+    }).catch(error => {
+      content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+    });
+  }
+
+  function renderTrainerProgressView(options) {
+    const content = document.getElementById('iltContent');
+
+    content.innerHTML = `
+      <div class="trainer-progress-container">
+        <div class="progress-header">
+          <h3><i class="fas fa-tasks"></i> Training Progress Management</h3>
+          <p>Filter trainings and mark topic completion</p>
+        </div>
+
+        <div class="filters-section">
+          <div class="filter-row">
+            <div class="filter-group">
+              <label><i class="fas fa-user"></i> Trainee Name</label>
+              <input type="text" id="filterTraineeName" placeholder="Search trainee..." onkeyup="loadTrainingsWithFilters()">
+            </div>
+
+            <div class="filter-group">
+              <label><i class="fas fa-laptop"></i> Application</label>
+              <select id="filterApplication" onchange="loadTrainingsWithFilters()">
+                <option value="">All Applications</option>
+                ${(options.applications || []).map(a => `<option value="${a}">${a}</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label><i class="fas fa-calendar"></i> Start Date</label>
+              <input type="date" id="filterStartDate" onchange="loadTrainingsWithFilters()">
+            </div>
+
+            <div class="filter-group">
+              <label><i class="fas fa-calendar"></i> End Date</label>
+              <input type="date" id="filterEndDate" onchange="loadTrainingsWithFilters()">
+            </div>
+
+            <div class="filter-group filter-actions">
+              <button class="btn btn-sm btn-outline" onclick="clearProgressFilters()">
+                <i class="fas fa-times"></i> Clear Filters
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="trainingsListContainer" class="trainings-list-container">
+          <div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading trainings...</p></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function clearProgressFilters() {
+    document.getElementById('filterTraineeName').value = '';
+    document.getElementById('filterApplication').value = '';
+    document.getElementById('filterStartDate').value = '';
+    document.getElementById('filterEndDate').value = '';
+    loadTrainingsWithFilters();
+  }
+
+  function loadTrainingsWithFilters() {
+    const container = document.getElementById('trainingsListContainer');
+    container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading trainings...</p></div>';
+
+    const filters = {
+      traineeName: document.getElementById('filterTraineeName')?.value || '',
+      application: document.getElementById('filterApplication')?.value || '',
+      startDate: document.getElementById('filterStartDate')?.value || '',
+      endDate: document.getElementById('filterEndDate')?.value || ''
+    };
+
+    google.script.run
+      .withSuccessHandler(renderTrainingsList)
+      .withFailureHandler(function(error) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getTrainingsForTrainer(filters);
+  }
+
+  function renderTrainingsList(data) {
+    const container = document.getElementById('trainingsListContainer');
+
+    if (!data || !data.trainings || data.trainings.length === 0) {
+      container.innerHTML = '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>No Trainings Found</h3><p>No trainings match your filters.</p></div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="trainings-grid">
+        ${data.trainings.map(t => `
+          <div class="training-card" onclick="viewTraineeProgress('${t.traineeEmail}', '${t.application.replace(/'/g, "\\'")}', '${t.batch}')">
+            <div class="training-card-header">
+              <h4>${t.application}</h4>
+              <span class="batch-badge">Batch: ${t.batch}</span>
+            </div>
+            <div class="training-card-body">
+              <div class="training-card-info">
+                <p><i class="fas fa-user"></i> ${t.traineeName}</p>
+                <p><i class="fas fa-envelope"></i> ${t.traineeEmail}</p>
+                <p><i class="fas fa-layer-group"></i> Level: ${t.level || 'N/A'}</p>
+                <p><i class="fas fa-calendar"></i> ${t.startDate} - ${t.endDate}</p>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function viewTraineeProgress(traineeEmail, application, batch) {
+    selectedTrainingForProgress = { traineeEmail, application, batch };
+
+    const container = document.getElementById('trainingsListContainer');
+    container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading progress...</p></div>';
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderTraineeProgressForTrainer(traineeEmail, application, batch, data);
+      })
+      .withFailureHandler(function(error) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getTraineeProgress(traineeEmail, application, batch);
+  }
+
+  function renderTraineeProgressForTrainer(traineeEmail, application, batch, data) {
+    const container = document.getElementById('trainingsListContainer');
+
+    const dayGroups = {};
+    (data.progress || []).forEach(p => {
+      if (!dayGroups[p.day]) dayGroups[p.day] = [];
+      dayGroups[p.day].push(p);
+    });
+
+    const sortedDays = Object.keys(dayGroups).sort((a, b) => {
+      const numA = parseInt(String(a).replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(String(b).replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    container.innerHTML = `
+      <div class="progress-detail-view">
+        <div class="progress-detail-header">
+          <button class="btn btn-sm btn-outline" onclick="loadTrainingsWithFilters()">
+            <i class="fas fa-arrow-left"></i> Back to List
+          </button>
+          <div class="progress-info">
+            <h3>${application}</h3>
+            <p>Trainee: ${traineeEmail} | Batch: ${batch}</p>
+          </div>
+        </div>
+
+        <div class="progress-topics-list">
+          ${sortedDays.map(day => `
+            <div class="day-section">
+              <h4 class="day-title"><i class="fas fa-calendar-day"></i> ${day}</h4>
+              <div class="topics-grid">
+                ${dayGroups[day].map(topic => `
+                  <div class="topic-card ${topic.status === 'Done' ? 'completed' : ''}">
+                    <div class="topic-content">
+                      <span class="topic-name">${topic.topic}</span>
+                      ${topic.markedDate ? `<span class="topic-meta">Marked by ${topic.markedBy} on ${topic.markedDate}</span>` : ''}
+                    </div>
+                    <div class="topic-actions">
+                      <button class="btn btn-sm ${topic.status === 'Done' ? 'btn-success' : 'btn-outline'}"
+                        onclick="toggleTopicStatus('${traineeEmail}', '${application.replace(/'/g, "\\'")}', '${batch}', '${day}', '${topic.topic.replace(/'/g, "\\'")}', '${topic.status === 'Done' ? 'Not Done' : 'Done'}')">
+                        <i class="fas ${topic.status === 'Done' ? 'fa-check' : 'fa-circle'}"></i>
+                        ${topic.status === 'Done' ? 'Done' : 'Mark Done'}
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function toggleTopicStatus(traineeEmail, application, batch, day, topic, newStatus) {
+    showLoading(true);
+
+    google.script.run
+      .withSuccessHandler(function(result) {
+        showLoading(false);
+        if (result.success) {
+          showToast(result.message, 'success');
+          viewTraineeProgress(traineeEmail, application, batch);
+        } else {
+          showToast(result.message || 'Failed to update status', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .markTopicStatus(traineeEmail, application, batch, day, topic, newStatus, currentUser?.email || '');
+  }
+
+  function loadILTEvaluations() {
+    google.script.run
+      .withSuccessHandler(renderILTEvaluations)
+      .withFailureHandler(function(error) {
+        document.getElementById('iltContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getILTEvaluationsData(currentUser ? currentUser.email : '');
+  }
+
+  function renderILTEvaluations(data) {
+    const content = document.getElementById('iltContent');
+    if (!data || !data.evaluations || data.evaluations.length === 0) {
+      content.innerHTML = `<div class="empty-state"><i class="fas fa-star"></i><h3>No Evaluations</h3><p>No ILT evaluations available yet.</p></div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead><tr><th>Training</th><th>Date</th><th>Score</th><th>Evaluator</th><th>Status</th></tr></thead>
+          <tbody>
+            ${data.evaluations.map(e => `
+              <tr>
+                <td>${e.training || '-'}</td>
+                <td>${e.date || '-'}</td>
+                <td>${e.score || '-'}</td>
+                <td>${e.evaluator || '-'}</td>
+                <td><span class="status-badge ${(e.status || 'pending').toLowerCase()}">${e.status || 'Pending'}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function loadILTReports() {
+    google.script.run
+      .withSuccessHandler(renderILTReports)
+      .withFailureHandler(function(error) {
+        document.getElementById('iltContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getILTReportsData();
+  }
+
+  function renderILTReports(data) {
+    const content = document.getElementById('iltContent');
+    if (!data || !data.certifications || data.certifications.length === 0) {
+      content.innerHTML = `<div class="empty-state"><i class="fas fa-certificate"></i><h3>No Certifications</h3><p>No ILT certifications available yet.</p></div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead><tr><th>Trainee</th><th>Training</th><th>Cert Date</th><th>Expiry</th><th>Status</th></tr></thead>
+          <tbody>
+            ${data.certifications.map(c => `
+              <tr>
+                <td>${c.trainee || '-'}</td>
+                <td>${c.training || '-'}</td>
+                <td>${c.certDate || '-'}</td>
+                <td>${c.expiryDate || '-'}</td>
+                <td><span class="status-badge ${(c.status || 'active').toLowerCase()}">${c.status || 'Active'}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // ==================== SBL SECTION ====================
+
+  function loadSBLSection() {
+    const tabs = ['dashboard', 'videos', 'evaluations', 'reports'];
+    let firstVisibleTab = 'dashboard';
+
+    if (userPermissions && userPermissions.sbl) {
+      for (const tab of tabs) {
+        if (userPermissions.sbl[tab]) { firstVisibleTab = tab; break; }
+      }
+    }
+    showSBLSubSection(firstVisibleTab);
+  }
+
+  function showSBLSubSection(subSection) {
+    document.querySelectorAll('#sblSection .sub-nav-item').forEach(tab => tab.classList.remove('active'));
+    const activeTab = document.getElementById('sbl' + capitalizeFirst(subSection) + 'Tab');
+    if (activeTab) activeTab.classList.add('active');
+
+    const contentDiv = document.getElementById('sblContent');
+    contentDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></div>';
+
+    switch (subSection) {
+      case 'dashboard': loadSBLDashboard(); break;
+      case 'videos': loadSBLVideos(); break;
+      case 'evaluations': loadSBLEvaluations(); break;
+      case 'reports': loadSBLReports(); break;
+    }
+  }
+
+  function loadSBLDashboard() {
+    google.script.run
+      .withSuccessHandler(renderSBLDashboard)
+      .withFailureHandler(function(error) {
+        document.getElementById('sblContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getSBLDashboardData();
+  }
+
+  function renderSBLDashboard(data) {
+    const content = document.getElementById('sblContent');
+    content.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon blue"><i class="fas fa-video"></i></div>
+          <div class="stat-info"><h3>${data.totalVideos || 0}</h3><p>Total Videos</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i class="fas fa-eye"></i></div>
+          <div class="stat-info"><h3>${data.totalViews || 0}</h3><p>Total Views</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow"><i class="fas fa-check-circle"></i></div>
+          <div class="stat-info"><h3>${data.completedVideos || 0}</h3><p>Completed</p></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function loadSBLVideos() {
+    google.script.run
+      .withSuccessHandler(renderSBLVideos)
+      .withFailureHandler(function(error) {
+        document.getElementById('sblContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getSBLVideosData();
+  }
+
+  function renderSBLVideos(data) {
+    const content = document.getElementById('sblContent');
+    if (!data || !data.videos || data.videos.length === 0) {
+      content.innerHTML = `<div class="empty-state"><i class="fas fa-video"></i><h3>No Videos</h3><p>No SBL videos available yet.</p></div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead><tr><th>Title</th><th>Description</th><th>Duration</th><th>Views</th></tr></thead>
+          <tbody>
+            ${data.videos.map(v => `
+              <tr>
+                <td>${v.title || '-'}</td>
+                <td>${v.description || '-'}</td>
+                <td>${v.duration || '-'}</td>
+                <td>${v.views || 0}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function loadSBLEvaluations() {
+    google.script.run
+      .withSuccessHandler(renderSBLEvaluations)
+      .withFailureHandler(function(error) {
+        document.getElementById('sblContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getSBLEvaluationsData(currentUser ? currentUser.email : '');
+  }
+
+  function renderSBLEvaluations(data) {
+    const content = document.getElementById('sblContent');
+    if (!data || !data.evaluations || data.evaluations.length === 0) {
+      content.innerHTML = `<div class="empty-state"><i class="fas fa-star"></i><h3>No Evaluations</h3><p>No SBL evaluations available yet.</p></div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead><tr><th>Video</th><th>Date</th><th>Score</th><th>Status</th></tr></thead>
+          <tbody>
+            ${data.evaluations.map(e => `
+              <tr>
+                <td>${e.video || '-'}</td>
+                <td>${e.date || '-'}</td>
+                <td>${e.score || '-'}</td>
+                <td><span class="status-badge ${(e.status || 'pending').toLowerCase()}">${e.status || 'Pending'}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function loadSBLReports() {
+    google.script.run
+      .withSuccessHandler(renderSBLReports)
+      .withFailureHandler(function(error) {
+        document.getElementById('sblContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getSBLReportsData();
+  }
+
+  function renderSBLReports(data) {
+    const content = document.getElementById('sblContent');
+    if (!data || !data.certifications || data.certifications.length === 0) {
+      content.innerHTML = `<div class="empty-state"><i class="fas fa-certificate"></i><h3>No Certifications</h3><p>No SBL certifications available yet.</p></div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead><tr><th>Trainee</th><th>Video</th><th>Completion Date</th><th>Status</th></tr></thead>
+          <tbody>
+            ${data.certifications.map(c => `
+              <tr>
+                <td>${c.trainee || '-'}</td>
+                <td>${c.video || '-'}</td>
+                <td>${c.completionDate || '-'}</td>
+                <td><span class="status-badge ${(c.status || 'active').toLowerCase()}">${c.status || 'Active'}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // ==================== COMPLIANCE SECTION ====================
+
+  function loadComplianceSection() {
+    showComplianceSubSection('calendar');
+  }
+
+  function showComplianceSubSection(subSection) {
+    document.querySelectorAll('#complianceSection .sub-nav-item').forEach(tab => tab.classList.remove('active'));
+    const activeTab = document.getElementById('compliance' + capitalizeFirst(subSection) + 'Tab');
+    if (activeTab) activeTab.classList.add('active');
+
+    const contentDiv = document.getElementById('complianceContent');
+    contentDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></div>';
+
+    switch (subSection) {
+      case 'calendar': loadComplianceCalendar(); break;
+      case 'status': loadComplianceStatus(); break;
+      case 'reports': loadComplianceReports(); break;
+      case 'management': loadComplianceManagement(); break;
+    }
+  }
+
+  function loadComplianceCalendar() {
+    google.script.run
+      .withSuccessHandler(renderComplianceDashboard)
+      .withFailureHandler(function(error) {
+        document.getElementById('complianceContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getComplianceDashboardData();
+  }
+
+  function renderComplianceDashboard(data) {
+    const content = document.getElementById('complianceContent');
+    content.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon blue"><i class="fas fa-calendar-check"></i></div>
+          <div class="stat-info"><h3>${data.totalEvents || 0}</h3><p>Total Events</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow"><i class="fas fa-clock"></i></div>
+          <div class="stat-info"><h3>${data.upcomingEvents || 0}</h3><p>Upcoming</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i class="fas fa-percentage"></i></div>
+          <div class="stat-info"><h3>${data.avgCompliance || 0}%</h3><p>Avg Compliance</p></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function loadComplianceStatus() {
+    google.script.run
+      .withSuccessHandler(renderComplianceStatus)
+      .withFailureHandler(function(error) {
+        document.getElementById('complianceContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getComplianceStatusData(currentUser ? currentUser.email : '');
+  }
+
+  function renderComplianceStatus(data) {
+    const content = document.getElementById('complianceContent');
+    if (!data || !data.statuses || data.statuses.length === 0) {
+      content.innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-check"></i><h3>No Status Data</h3><p>No compliance status data available yet.</p></div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead><tr><th>Trainee</th><th>Event</th><th>Compliance</th><th>Status</th><th>Last Updated</th></tr></thead>
+          <tbody>
+            ${data.statuses.map(s => `
+              <tr>
+                <td>${s.trainee || '-'}</td>
+                <td>${s.event || '-'}</td>
+                <td>${s.compliance || 0}%</td>
+                <td><span class="status-badge ${(s.status || 'pending').toLowerCase()}">${s.status || 'Pending'}</span></td>
+                <td>${s.lastUpdated || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function loadComplianceReports() {
+    google.script.run
+      .withSuccessHandler(renderComplianceReports)
+      .withFailureHandler(function(error) {
+        document.getElementById('complianceContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getComplianceReportsData();
+  }
+
+  function renderComplianceReports(data) {
+    const content = document.getElementById('complianceContent');
+    if (!data || !data.reports || data.reports.length === 0) {
+      content.innerHTML = `<div class="empty-state"><i class="fas fa-file-alt"></i><h3>No Reports</h3><p>No compliance reports available yet.</p></div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Generated Date</th><th>Generated By</th><th>Status</th></tr></thead>
+          <tbody>
+            ${data.reports.map(r => `
+              <tr>
+                <td>${r.name || '-'}</td>
+                <td>${r.type || '-'}</td>
+                <td>${r.generatedDate || '-'}</td>
+                <td>${r.generatedBy || '-'}</td>
+                <td><span class="status-badge ${(r.status || 'active').toLowerCase()}">${r.status || 'Active'}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function loadComplianceManagement() {
+    const content = document.getElementById('complianceContent');
+    content.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-cogs"></i>
+        <h3>Compliance Management</h3>
+        <p>Compliance management features coming soon.</p>
+      </div>
+    `;
+  }
+
+  // ==================== OTHERS SECTION ====================
+
+  function loadOthersSection() {
+    const content = document.getElementById('othersContent');
+    if (content) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-ellipsis-h"></i>
+          <h3>Other Features</h3>
+          <p>Additional features and settings will be available here.</p>
+        </div>
+      `;
+    }
+  }
+
+
+  // =====================================================================================
+  // QUIZ EVALUATION MODULE - JAVASCRIPT FUNCTIONS
+  // =====================================================================================
+
+  // ==================== TRAINER QUIZ MANAGEMENT ====================
+
+  function loadTrainerQuizManagement(categoryName) {
+    const content = document.getElementById('categorySectionContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading quiz management...</p></div>';
+
+    Promise.all([
+      new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getQuizApplications();
+      }),
+      new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getAllBatches();
+      }),
+      new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getQuizStatistics();
+      })
+    ]).then(([applications, batches, stats]) => {
+      renderTrainerQuizManagement(categoryName, applications, batches, stats);
+    }).catch(error => {
+      content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+    });
+  }
+
+  function loadTrainerQuizManagementILT() {
+    const content = document.getElementById('iltContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading quiz management...</p></div>';
+
+    Promise.all([
+      new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getQuizApplications();
+      }),
+      new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getAllBatches();
+      }),
+      new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getQuizStatistics();
+      })
+    ]).then(([applications, batches, stats]) => {
+      renderTrainerQuizManagementILT(applications, batches, stats);
+    }).catch(error => {
+      content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+    });
+  }
+
+  function renderTrainerQuizManagement(categoryName, applications, batches, stats) {
+    const content = document.getElementById('categorySectionContent');
+    
+    content.innerHTML = `
+      <div class="quiz-management-container">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-clipboard-list"></i></div>
+            <div class="stat-info"><h3>${stats.totalAssigned || 0}</h3><p>Total Assigned</p></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon yellow"><i class="fas fa-clock"></i></div>
+            <div class="stat-info"><h3>${stats.pendingCount || 0}</h3><p>Pending</p></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-info"><h3>${stats.completedCount || 0}</h3><p>Completed</p></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple"><i class="fas fa-percentage"></i></div>
+            <div class="stat-info"><h3>${stats.averageScore || 0}%</h3><p>Avg Score</p></div>
+          </div>
+        </div>
+
+        <div class="quiz-actions-section">
+          <button class="btn btn-primary" onclick="openAssignQuizModal()">
+            <i class="fas fa-plus"></i> Assign New Quiz
+          </button>
+          <button class="btn btn-outline" onclick="loadQuizAssignments()">
+            <i class="fas fa-list"></i> View Assignments
+          </button>
+        </div>
+
+        <div id="quizManagementContent">
+          <div class="empty-state">
+            <i class="fas fa-question-circle"></i>
+            <h3>Quiz Management</h3>
+            <p>Click "Assign New Quiz" to assign quizzes to trainees, or "View Assignments" to see existing assignments.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTrainerQuizManagementILT(applications, batches, stats) {
+    const content = document.getElementById('iltContent');
+    
+    content.innerHTML = `
+      <div class="quiz-management-container">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-clipboard-list"></i></div>
+            <div class="stat-info"><h3>${stats.totalAssigned || 0}</h3><p>Total Assigned</p></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon yellow"><i class="fas fa-clock"></i></div>
+            <div class="stat-info"><h3>${stats.pendingCount || 0}</h3><p>Pending</p></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-info"><h3>${stats.completedCount || 0}</h3><p>Completed</p></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple"><i class="fas fa-percentage"></i></div>
+            <div class="stat-info"><h3>${stats.averageScore || 0}%</h3><p>Avg Score</p></div>
+          </div>
+        </div>
+
+        <div class="quiz-actions-section" style="margin: 20px 0; display: flex; gap: 10px;">
+          <button class="btn btn-primary" onclick="openAssignQuizModal()">
+            <i class="fas fa-plus"></i> Assign New Quiz
+          </button>
+          <button class="btn btn-outline" onclick="loadQuizAssignmentsILT()">
+            <i class="fas fa-list"></i> View Assignments
+          </button>
+        </div>
+
+        <div id="quizManagementContentILT">
+          <div class="empty-state">
+            <i class="fas fa-question-circle"></i>
+            <h3>Quiz Management</h3>
+            <p>Click "Assign New Quiz" to assign quizzes to trainees, or "View Assignments" to see existing assignments.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function openAssignQuizModal() {
+    document.getElementById('assignQuizModal').classList.add('active');
+    selectedQuizTrainees = [];
+    
+    // Load applications for quiz
+    google.script.run
+      .withSuccessHandler(function(apps) {
+        const select = document.getElementById('quizApplicationSelect');
+        select.innerHTML = '<option value="">Select Application</option>' +
+          (apps || []).map(a => `<option value="${a}">${a}</option>`).join('');
+      })
+      .getQuizApplications();
+    
+    // Load batches
+    google.script.run
+      .withSuccessHandler(function(batches) {
+        const select = document.getElementById('quizBatchSelect');
+        select.innerHTML = '<option value="">Select Batch (Optional)</option>' +
+          (batches || []).map(b => `<option value="${b}">${b}</option>`).join('');
+      })
+      .getAllBatches();
+    
+    // Load all trainees
+    google.script.run
+      .withSuccessHandler(function(trainees) {
+        renderTraineeSelectionList(trainees);
+      })
+      .getAllTrainees();
+    
+    // Reset form
+    document.getElementById('quizTestNumberSelect').innerHTML = '<option value="">Select Test Number</option>';
+    document.getElementById('quizDueDate').value = '';
+  }
+
+  function closeAssignQuizModal() {
+    document.getElementById('assignQuizModal').classList.remove('active');
+    selectedQuizTrainees = [];
+  }
+
+  function onQuizApplicationChange() {
+    const app = document.getElementById('quizApplicationSelect').value;
+    const testSelect = document.getElementById('quizTestNumberSelect');
+    
+    if (!app) {
+      testSelect.innerHTML = '<option value="">Select Test Number</option>';
+      return;
+    }
+    
+    testSelect.innerHTML = '<option value="">Loading...</option>';
+    
+    google.script.run
+      .withSuccessHandler(function(tests) {
+        testSelect.innerHTML = '<option value="">Select Test Number</option>' +
+          (tests || []).map(t => `<option value="${t}">${t}</option>`).join('');
+      })
+      .withFailureHandler(function(error) {
+        testSelect.innerHTML = '<option value="">Error loading tests</option>';
+      })
+      .getQuizTestNumbers(app);
+  }
+
+  function onQuizBatchChange() {
+    const batch = document.getElementById('quizBatchSelect').value;
+    
+    if (!batch) {
+      // Load all trainees
+      google.script.run
+        .withSuccessHandler(function(trainees) {
+          renderTraineeSelectionList(trainees);
+        })
+        .getAllTrainees();
+    } else {
+      // Load trainees for specific batch
+      google.script.run
+        .withSuccessHandler(function(trainees) {
+          renderTraineeSelectionList(trainees);
+        })
+        .getTraineesForBatch(batch);
+    }
+  }
+
+  function renderTraineeSelectionList(trainees) {
+    const container = document.getElementById('traineeSelectionList');
+    
+    if (!trainees || trainees.length === 0) {
+      container.innerHTML = '<p style="color: var(--gray-color); text-align: center;">No trainees found</p>';
+      return;
+    }
+    
+    container.innerHTML = `
+      <div class="trainee-selection-header">
+        <label class="checkbox-label">
+          <input type="checkbox" id="selectAllTrainees" onchange="toggleSelectAllTrainees(this)">
+          <span>Select All (${trainees.length})</span>
+        </label>
+      </div>
+      <div class="trainee-checkbox-list">
+        ${trainees.map(t => `
+          <label class="trainee-checkbox-item">
+            <input type="checkbox" value="${t.email}" data-name="${t.name}" onchange="onTraineeCheckboxChange(this)">
+            <span class="trainee-checkbox-info">
+              <strong>${t.name}</strong>
+              <small>${t.email}</small>
+            </span>
+          </label>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function toggleSelectAllTrainees(checkbox) {
+    const checkboxes = document.querySelectorAll('.trainee-checkbox-list input[type="checkbox"]');
+    selectedQuizTrainees = [];
+    
+    checkboxes.forEach(cb => {
+      cb.checked = checkbox.checked;
+      if (checkbox.checked) {
+        selectedQuizTrainees.push(cb.value);
+      }
+    });
+    
+    updateSelectedTraineesCount();
+  }
+
+  function onTraineeCheckboxChange(checkbox) {
+    if (checkbox.checked) {
+      if (!selectedQuizTrainees.includes(checkbox.value)) {
+        selectedQuizTrainees.push(checkbox.value);
+      }
+    } else {
+      selectedQuizTrainees = selectedQuizTrainees.filter(e => e !== checkbox.value);
+    }
+    
+    updateSelectedTraineesCount();
+  }
+
+  function updateSelectedTraineesCount() {
+    const countEl = document.getElementById('selectedTraineesCount');
+    if (countEl) {
+      countEl.textContent = `${selectedQuizTrainees.length} trainee(s) selected`;
+    }
+  }
+
+  function assignQuiz() {
+    const application = document.getElementById('quizApplicationSelect').value;
+    const testNumber = document.getElementById('quizTestNumberSelect').value;
+    const batch = document.getElementById('quizBatchSelect').value;
+    const dueDate = document.getElementById('quizDueDate').value;
+    
+    if (!application) {
+      showToast('Please select an application', 'warning');
+      return;
+    }
+    
+    if (!testNumber) {
+      showToast('Please select a test number', 'warning');
+      return;
+    }
+    
+    if (selectedQuizTrainees.length === 0) {
+      showToast('Please select at least one trainee', 'warning');
+      return;
+    }
+    
+    showLoading(true);
+    
+    const assignmentData = {
+      application: application,
+      testNumber: testNumber,
+      batch: batch,
+      traineeEmails: selectedQuizTrainees,
+      assignedBy: currentUser?.email || '',
+      dueDate: dueDate
+    };
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        showLoading(false);
+        if (result.success) {
+          showToast(result.message, 'success');
+          closeAssignQuizModal();
+          // Refresh the quiz management view
+          const userType = (currentUser?.type || '').toLowerCase().trim();
+          if (userType === 'trainer') {
+            if (currentActiveCategory) {
+              loadTrainerQuizManagement(currentActiveCategory);
+            } else {
+              loadTrainerQuizManagementILT();
+            }
+          }
+        } else {
+          showToast(result.message || 'Failed to assign quiz', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .assignQuizToTrainees(assignmentData);
+  }
+
+  function loadQuizAssignments() {
+    const container = document.getElementById('quizManagementContent');
+    container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading assignments...</p></div>';
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderQuizAssignments(data, 'quizManagementContent');
+      })
+      .withFailureHandler(function(error) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getQuizAssignmentsForTrainer({});
+  }
+
+  function loadQuizAssignmentsILT() {
+    const container = document.getElementById('quizManagementContentILT');
+    container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading assignments...</p></div>';
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderQuizAssignments(data, 'quizManagementContentILT');
+      })
+      .withFailureHandler(function(error) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getQuizAssignmentsForTrainer({});
+  }
+
+  function renderQuizAssignments(data, containerId) {
+    const container = document.getElementById(containerId);
+    
+    if (!data || !data.assignments || data.assignments.length === 0) {
+      container.innerHTML = '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>No Assignments</h3><p>No quiz assignments found.</p></div>';
+      return;
+    }
+    
+    container.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Assignment ID</th>
+              <th>Batch</th>
+              <th>Trainee</th>
+              <th>Application</th>
+              <th>Test</th>
+              <th>Assigned Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.assignments.map(a => `
+              <tr>
+                <td>${a.assignmentId}</td>
+                <td>${a.batch || '-'}</td>
+                <td>${a.traineeName}<br><small>${a.traineeEmail}</small></td>
+                <td>${a.application}</td>
+                <td>${a.testNumber}</td>
+                <td>${a.assignedDate}</td>
+                <td><span class="status-badge ${a.status.toLowerCase()}">${a.status}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // ==================== TRAINEE QUIZ FUNCTIONS ====================
+
+  function loadTraineeQuizzes(categoryName) {
+    const content = document.getElementById('categorySectionContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading your quizzes...</p></div>';
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderTraineeQuizzes(categoryName, data);
+      })
+      .withFailureHandler(function(error) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getPendingQuizzesForTrainee(currentUser?.email || '');
+  }
+
+  function loadTraineeQuizzesILT() {
+    const content = document.getElementById('iltContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading your quizzes...</p></div>';
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderTraineeQuizzesILT(data);
+      })
+      .withFailureHandler(function(error) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getPendingQuizzesForTrainee(currentUser?.email || '');
+  }
+
+  function renderTraineeQuizzes(categoryName, data) {
+    const content = document.getElementById('categorySectionContent');
+    
+    if (!data || !data.quizzes || data.quizzes.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-clipboard-check"></i>
+          <h3>No Pending Quizzes</h3>
+          <p>You don't have any pending quizzes at the moment.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    content.innerHTML = `
+      <div class="quiz-list-header">
+        <h3><i class="fas fa-question-circle"></i> My Pending Quizzes</h3>
+        <p>Click on a quiz to start</p>
+      </div>
+      
+      <div class="quiz-cards-grid">
+        ${data.quizzes.map(q => `
+          <div class="quiz-card" onclick="startQuiz('${q.assignmentId}', '${q.application.replace(/'/g, "\\'")}', '${q.testNumber}')">
+            <div class="quiz-card-header">
+              <span class="quiz-app-badge">${q.application}</span>
+              <span class="quiz-test-badge">${q.testNumber}</span>
+            </div>
+            <div class="quiz-card-body">
+              <h4>${q.application} - ${q.testNumber}</h4>
+              <p><i class="fas fa-calendar"></i> Assigned: ${q.assignedDate}</p>
+              ${q.dueDate ? `<p><i class="fas fa-clock"></i> Due: ${q.dueDate}</p>` : ''}
+              <p><i class="fas fa-list"></i> ${q.questionCount} Questions</p>
+            </div>
+            <div class="quiz-card-footer">
+              <button class="btn btn-primary btn-sm">
+                <i class="fas fa-play"></i> Start Quiz
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function renderTraineeQuizzesILT(data) {
+    const content = document.getElementById('iltContent');
+    
+    if (!data || !data.quizzes || data.quizzes.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-clipboard-check"></i>
+          <h3>No Pending Quizzes</h3>
+          <p>You don't have any pending quizzes at the moment.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    content.innerHTML = `
+      <div class="quiz-list-header" style="margin-bottom: 20px;">
+        <h3><i class="fas fa-question-circle"></i> My Pending Quizzes</h3>
+        <p>Click on a quiz to start</p>
+      </div>
+      
+      <div class="quiz-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+        ${data.quizzes.map(q => `
+          <div class="quiz-card" onclick="startQuiz('${q.assignmentId}', '${q.application.replace(/'/g, "\\'")}', '${q.testNumber}')" style="background: var(--white); border-radius: var(--border-radius-lg); box-shadow: var(--shadow); padding: 20px; cursor: pointer; transition: var(--transition);">
+            <div class="quiz-card-header" style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+              <span class="quiz-app-badge" style="background: var(--primary-color); color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;">${q.application}</span>
+              <span class="quiz-test-badge" style="background: var(--secondary-color); color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;">${q.testNumber}</span>
+            </div>
+            <div class="quiz-card-body">
+              <h4 style="margin-bottom: 10px;">${q.application} - ${q.testNumber}</h4>
+              <p style="color: var(--gray-color); font-size: 14px;"><i class="fas fa-calendar"></i> Assigned: ${q.assignedDate}</p>
+              ${q.dueDate ? `<p style="color: var(--gray-color); font-size: 14px;"><i class="fas fa-clock"></i> Due: ${q.dueDate}</p>` : ''}
+              <p style="color: var(--gray-color); font-size: 14px;"><i class="fas fa-list"></i> ${q.questionCount} Questions</p>
+            </div>
+            <div class="quiz-card-footer" style="margin-top: 15px;">
+              <button class="btn btn-primary btn-sm">
+                <i class="fas fa-play"></i> Start Quiz
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function startQuiz(assignmentId, application, testNumber) {
+    showLoading(true);
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        showLoading(false);
+        // FIXED: Check for success flag from backend
+        if (data && data.success && data.questions && data.questions.length > 0) {
+          currentQuizData = {
+            assignmentId: assignmentId,
+            application: application,
+            testNumber: testNumber,
+            questions: data.questions,
+            currentIndex: 0,
+            answers: {}
+          };
+          showQuizInterface();
+        } else {
+          // Show specific error message from backend or default message
+          const errorMsg = (data && data.message) ? data.message : 'Failed to load quiz. No questions found for this quiz.';
+          showToast(errorMsg, 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error loading quiz: ' + error.message, 'error');
+      })
+      .getQuizQuestions(application, testNumber);
+  }
+
+  function showQuizInterface() {
+    document.getElementById('quizTakingModal').classList.add('active');
+    
+    // Set quiz info
+    document.getElementById('quizInfoTitle').textContent = `${currentQuizData.application} - ${currentQuizData.testNumber}`;
+    document.getElementById('quizTotalQuestions').textContent = currentQuizData.questions.length;
+    
+    // Start timer
+    quizStartTime = new Date();
+    startQuizTimer();
+    
+    // Render navigation dots
+    renderQuizNavigationDots();
+    
+    // Show first question
+    showQuizQuestion(0);
+  }
+
+  function startQuizTimer() {
+    if (quizTimerInterval) clearInterval(quizTimerInterval);
+    
+    quizTimerInterval = setInterval(function() {
+      const elapsed = Math.floor((new Date() - quizStartTime) / 1000);
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      document.getElementById('quizTimer').textContent = 
+        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }, 1000);
+  }
+
+  function renderQuizNavigationDots() {
+    const container = document.getElementById('quizNavigationDots');
+    container.innerHTML = currentQuizData.questions.map((q, i) => `
+      <div class="quiz-nav-dot ${i === 0 ? 'active' : ''} ${currentQuizData.answers[i] !== undefined ? 'answered' : ''}" 
+           onclick="showQuizQuestion(${i})">${i + 1}</div>
+    `).join('');
+  }
+
+  function showQuizQuestion(index) {
+    currentQuizData.currentIndex = index;
+    const question = currentQuizData.questions[index];
+    
+    document.getElementById('quizCurrentQuestion').textContent = index + 1;
+    
+    const container = document.getElementById('quizQuestionContainer');
+    container.innerHTML = `
+      <div class="quiz-question">
+        <h3 class="question-text">${question.question}</h3>
+        <div class="quiz-options">
+          ${['A', 'B', 'C', 'D'].map(opt => `
+            <label class="quiz-option ${currentQuizData.answers[index] === opt ? 'selected' : ''}">
+              <input type="radio" name="quizAnswer" value="${opt}" 
+                ${currentQuizData.answers[index] === opt ? 'checked' : ''}
+                onchange="selectQuizAnswer('${opt}')">
+              <span class="option-letter">${opt}</span>
+              <span class="option-text">${question['option' + opt] || ''}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    
+    // Update navigation dots
+    document.querySelectorAll('.quiz-nav-dot').forEach((dot, i) => {
+      dot.classList.toggle('active', i === index);
+      dot.classList.toggle('answered', currentQuizData.answers[i] !== undefined);
+    });
+    
+    // Update prev/next buttons
+    document.getElementById('quizPrevBtn').disabled = index === 0;
+    document.getElementById('quizNextBtn').classList.toggle('btn-hidden', index === currentQuizData.questions.length - 1);
+    document.getElementById('quizSubmitBtn').classList.toggle('btn-hidden', index !== currentQuizData.questions.length - 1);
+  }
+
+  function selectQuizAnswer(answer) {
+    currentQuizData.answers[currentQuizData.currentIndex] = answer;
+    
+    // Update option styling
+    document.querySelectorAll('.quiz-option').forEach(opt => {
+      opt.classList.toggle('selected', opt.querySelector('input').value === answer);
+    });
+    
+    // Update navigation dot
+    renderQuizNavigationDots();
+    showQuizQuestion(currentQuizData.currentIndex);
+  }
+
+  function prevQuizQuestion() {
+    if (currentQuizData.currentIndex > 0) {
+      showQuizQuestion(currentQuizData.currentIndex - 1);
+    }
+  }
+
+  function nextQuizQuestion() {
+    if (currentQuizData.currentIndex < currentQuizData.questions.length - 1) {
+      showQuizQuestion(currentQuizData.currentIndex + 1);
+    }
+  }
+
+  function submitQuiz() {
+    // Check if all questions are answered
+    const unanswered = currentQuizData.questions.length - Object.keys(currentQuizData.answers).length;
+    
+    if (unanswered > 0) {
+      if (!confirm(`You have ${unanswered} unanswered question(s). Are you sure you want to submit?`)) {
+        return;
+      }
+    }
+    
+    // Stop timer
+    if (quizTimerInterval) {
+      clearInterval(quizTimerInterval);
+      quizTimerInterval = null;
+    }
+    
+    const timeTaken = Math.floor((new Date() - quizStartTime) / 1000);
+    
+    showLoading(true);
+    
+    const submissionData = {
+      assignmentId: currentQuizData.assignmentId,
+      application: currentQuizData.application,
+      testNumber: currentQuizData.testNumber,
+      traineeEmail: currentUser?.email || '',
+      traineeName: currentUser?.name || '',
+      answers: currentQuizData.answers,
+      timeTaken: timeTaken
+    };
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        showLoading(false);
+        if (result.success) {
+          closeQuizTakingModal();
+          showQuizResults(result);
+        } else {
+          showToast(result.message || 'Failed to submit quiz', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .submitQuizAnswers(submissionData);
+  }
+
+  function closeQuizTakingModal() {
+    if (quizTimerInterval) {
+      clearInterval(quizTimerInterval);
+      quizTimerInterval = null;
+    }
+    document.getElementById('quizTakingModal').classList.remove('active');
+    currentQuizData = null;
+  }
+
+  function showQuizResults(result) {
+    document.getElementById('quizResultsModal').classList.add('active');
+    
+    const scorePercent = result.scorePercent || 0;
+    const passed = scorePercent >= 70;
+    
+    document.getElementById('quizResultScore').textContent = `${result.correctCount}/${result.totalQuestions}`;
+    document.getElementById('quizResultPercent').textContent = `${scorePercent}%`;
+    document.getElementById('quizResultPercent').className = `result-percent ${passed ? 'passed' : 'failed'}`;
+    document.getElementById('quizResultStatus').textContent = passed ? 'PASSED' : 'FAILED';
+    document.getElementById('quizResultStatus').className = `result-status ${passed ? 'passed' : 'failed'}`;
+    
+    // Show detailed results
+    const detailsContainer = document.getElementById('quizResultDetails');
+    detailsContainer.innerHTML = result.details.map((d, i) => `
+      <div class="result-item ${d.isCorrect ? 'correct' : 'incorrect'}">
+        <div class="result-question">
+          <span class="question-number">Q${i + 1}.</span>
+          <span class="question-text">${d.question}</span>
+        </div>
+        <div class="result-answer">
+          <span class="your-answer">Your Answer: <strong>${d.yourAnswer || 'Not answered'}</strong></span>
+          ${!d.isCorrect ? `<span class="correct-answer">Correct: <strong>${d.correctAnswer}</strong></span>` : ''}
+          <span class="result-icon">${d.isCorrect ? '<i class="fas fa-check-circle" style="color: var(--secondary-color);"></i>' : '<i class="fas fa-times-circle" style="color: var(--danger-color);"></i>'}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function closeQuizResultsModal() {
+    document.getElementById('quizResultsModal').classList.remove('active');
+    
+    // Refresh the quiz list
+    const userType = (currentUser?.type || '').toLowerCase().trim();
+    if (userType === 'trainee') {
+      if (currentActiveCategory) {
+        loadTraineeQuizzes(currentActiveCategory);
+      } else {
+        loadTraineeQuizzesILT();
+      }
+    }
+  }
+  // ==================== QUIZ TEST REPORTS (ENHANCED) ====================
+
+  // Store current filter state for reports
+  let reportsFilterState = {
+    batch: '',
+    testNumber: '',
+    application: '',
+    startDate: '',
+    endDate: ''
+  };
+
+  function loadQuizTestReports(categoryName) {
+    const content = document.getElementById('categorySectionContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading reports and certification data...</p></div>';
+    
+    // Reset filter state
+    reportsFilterState = { batch: '', testNumber: '', application: '', startDate: '', endDate: '' };
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderEnhancedReportsView(categoryName, data, 'categorySectionContent');
+      })
+      .withFailureHandler(function(error) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getReportsAndCertificationData(null);
+  }
+
+  function loadQuizTestReportsILT() {
+    const content = document.getElementById('iltContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading reports and certification data...</p></div>';
+    
+    // Reset filter state
+    reportsFilterState = { batch: '', testNumber: '', application: '', startDate: '', endDate: '' };
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderEnhancedReportsView('ILT', data, 'iltContent');
+      })
+      .withFailureHandler(function(error) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getReportsAndCertificationData(null);
+  }
+
+  function renderEnhancedReportsView(categoryName, data, containerId) {
+    const content = document.getElementById(containerId);
+    const filterOptions = data.filterOptions || { batches: [], testNumbers: [], applications: [] };
+    const tiles = data.tiles || { totalEvaluations: 0, totalPassed: 0, totalFailed: 0, totalCertifications: 0 };
+    const certifications = data.certifications || [];
+    const userType = (currentUser?.type || '').toLowerCase().trim();
+    const canAddCertification = (userType === 'trainer' || userType === 'manager');
+    
+    content.innerHTML = `
+      <div class="test-reports-container">
+        <div class="reports-header" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3><i class="fas fa-chart-bar"></i> Reports & Certification</h3>
+            <p>View comprehensive test reports and certifications</p>
+          </div>
+          ${canAddCertification ? `
+          <button class="btn btn-primary" onclick="openAddCertificationModal()">
+            <i class="fas fa-plus"></i> Add Certification to Individual
+          </button>
+          ` : ''}
+        </div>
+        
+        <!-- TILES SECTION -->
+        <div class="stats-grid" style="margin-bottom: 25px;">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-clipboard-check"></i></div>
+            <div class="stat-info">
+              <h3 id="tileTotalEvaluations">${tiles.totalEvaluations}</h3>
+              <p>Total Evaluations</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fas fa-user-check"></i></div>
+            <div class="stat-info">
+              <h3 id="tileTotalPassed">${tiles.totalPassed}</h3>
+              <p>Total Pass Trainees</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon red"><i class="fas fa-user-times"></i></div>
+            <div class="stat-info">
+              <h3 id="tileTotalFailed">${tiles.totalFailed}</h3>
+              <p>Total Failed Trainees</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple"><i class="fas fa-certificate"></i></div>
+            <div class="stat-info">
+              <h3 id="tileTotalCertifications">${tiles.totalCertifications || 0}</h3>
+              <p>Total Certifications</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- TABS FOR REPORTS AND CERTIFICATIONS -->
+        <div class="reports-tabs" style="margin-bottom: 20px; display: flex; gap: 10px;">
+          <button class="btn btn-primary reports-tab-btn active" id="evalReportsTab${containerId}" onclick="showReportsTab('evaluations', '${containerId}')">
+            <i class="fas fa-file-alt"></i> Evaluation Reports
+          </button>
+          <button class="btn btn-outline reports-tab-btn" id="certReportsTab${containerId}" onclick="showReportsTab('certifications', '${containerId}')">
+            <i class="fas fa-certificate"></i> Certifications
+          </button>
+        </div>
+        
+        <!-- FILTERS SECTION -->
+        <div class="reports-filters" style="background: var(--white); padding: 20px; border-radius: var(--border-radius); margin-bottom: 20px; box-shadow: var(--shadow);">
+          <div class="filter-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+            <div class="filter-group" style="flex: 1; min-width: 150px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 13px;"><i class="fas fa-layer-group"></i> Batch Number</label>
+              <select id="reportBatchFilter${containerId}" onchange="applyReportsFilters('${containerId}')" style="width: 100%; padding: 10px; border: 1px solid var(--light-gray); border-radius: var(--border-radius);">
+                <option value="">All Batches</option>
+                ${(filterOptions.batches || []).map(b => '<option value="' + b + '">' + b + '</option>').join('')}
+              </select>
+            </div>
+            <div class="filter-group" style="flex: 1; min-width: 150px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 13px;"><i class="fas fa-file-alt"></i> Test Assigned</label>
+              <select id="reportTestFilter${containerId}" onchange="applyReportsFilters('${containerId}')" style="width: 100%; padding: 10px; border: 1px solid var(--light-gray); border-radius: var(--border-radius);">
+                <option value="">All Tests</option>
+                ${(filterOptions.testNumbers || []).map(t => '<option value="' + t + '">' + t + '</option>').join('')}
+              </select>
+            </div>
+            <div class="filter-group" style="flex: 1; min-width: 150px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 13px;"><i class="fas fa-desktop"></i> Application</label>
+              <select id="reportAppFilter${containerId}" onchange="applyReportsFilters('${containerId}')" style="width: 100%; padding: 10px; border: 1px solid var(--light-gray); border-radius: var(--border-radius);">
+                <option value="">All Applications</option>
+                ${(filterOptions.applications || []).map(a => '<option value="' + a + '">' + a + '</option>').join('')}
+              </select>
+            </div>
+            <div class="filter-group" style="flex: 1; min-width: 130px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 13px;"><i class="fas fa-calendar-alt"></i> Start Date</label>
+              <input type="date" id="reportStartDate${containerId}" onchange="applyReportsFilters('${containerId}')" style="width: 100%; padding: 10px; border: 1px solid var(--light-gray); border-radius: var(--border-radius);">
+            </div>
+            <div class="filter-group" style="flex: 1; min-width: 130px;">
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 13px;"><i class="fas fa-calendar-alt"></i> End Date</label>
+              <input type="date" id="reportEndDate${containerId}" onchange="applyReportsFilters('${containerId}')" style="width: 100%; padding: 10px; border: 1px solid var(--light-gray); border-radius: var(--border-radius);">
+            </div>
+            <div class="filter-group filter-actions" style="display: flex; gap: 10px;">
+              <button class="btn btn-sm btn-outline" onclick="clearReportsFilters('${containerId}')" style="padding: 10px 15px;">
+                <i class="fas fa-times"></i> Clear
+              </button>
+              <button class="btn btn-sm btn-primary" onclick="exportEnhancedReports('${containerId}')" style="padding: 10px 15px;">
+                <i class="fas fa-download"></i> Export CSV
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- EVALUATION REPORTS PANEL -->
+        <div id="evaluationsPanel${containerId}" class="reports-panel">
+          <div id="reportsTableContainer${containerId}">
+            ${renderReportsTable(data.reports || [], containerId)}
+          </div>
+        </div>
+        
+        <!-- CERTIFICATIONS PANEL -->
+        <div id="certificationsPanel${containerId}" class="reports-panel" style="display: none;">
+          <div id="certificationsTableContainer${containerId}">
+            ${renderCertificationsTable(certifications, containerId)}
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Store certifications data for later use
+    window['certificationsData_' + containerId] = certifications;
+  }
+
+  function renderReportsTable(reports, containerId) {
+    if (!reports || reports.length === 0) {
+      return '<div class="empty-state" style="padding: 40px; text-align: center;"><i class="fas fa-clipboard-list" style="font-size: 48px; color: var(--gray-color); margin-bottom: 15px;"></i><h3>No Reports Found</h3><p>No test reports match the selected criteria.</p></div>';
+    }
+    
+    let tableHtml = '<div class="data-table-container" style="background: var(--white); border-radius: var(--border-radius); box-shadow: var(--shadow); overflow: hidden;">';
+    tableHtml += '<table class="data-table" style="width: 100%; border-collapse: collapse;">';
+    tableHtml += '<thead><tr style="background: var(--background);">';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Batch Number</th>';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Name</th>';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Email ID</th>';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Application</th>';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Test</th>';
+    tableHtml += '<th style="padding: 15px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Score</th>';
+    tableHtml += '<th style="padding: 15px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Status</th>';
+    tableHtml += '<th style="padding: 15px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Download</th>';
+    tableHtml += '</tr></thead><tbody>';
+    
+    reports.forEach(function(r) {
+      var statusStyle = r.status === 'Pass' 
+        ? 'background: rgba(52, 168, 83, 0.1); color: #34a853;' 
+        : 'background: rgba(234, 67, 53, 0.1); color: #ea4335;';
+      var statusIcon = r.status === 'Pass' 
+        ? '<i class="fas fa-check-circle"></i>' 
+        : '<i class="fas fa-times-circle"></i>';
+      
+      tableHtml += '<tr style="border-bottom: 1px solid var(--light-gray);">';
+      tableHtml += '<td style="padding: 12px 15px;">' + (r.batch || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px; font-weight: 500;">' + (r.traineeName || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px; color: var(--gray-color); font-size: 13px;">' + (r.traineeEmail || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px;">' + (r.application || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px;">' + (r.testNumber || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px; text-align: center;"><strong>' + (r.correctAnswers || 0) + '/' + (r.totalQuestions || 0) + '</strong> (' + (r.score || 0) + '%)</td>';
+      tableHtml += '<td style="padding: 12px 15px; text-align: center;"><span class="status-badge" style="padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; ' + statusStyle + '">' + statusIcon + ' ' + (r.status || '-') + '</span></td>';
+      tableHtml += '<td style="padding: 12px 15px; text-align: center;"><button class="btn btn-sm btn-primary" onclick="downloadEvaluationReport(\'' + r.resultId + '\')" style="padding: 6px 12px;"><i class="fas fa-download"></i> Download</button></td>';
+      tableHtml += '</tr>';
+    });
+    
+    tableHtml += '</tbody></table></div>';
+    tableHtml += '<div style="margin-top: 15px; padding: 10px; background: var(--background); border-radius: var(--border-radius); text-align: right; font-size: 13px; color: var(--gray-color);">Showing ' + reports.length + ' record(s)</div>';
+    
+    return tableHtml;
+  }
+
+  function applyReportsFilters(containerId) {
+    var batchEl = document.getElementById('reportBatchFilter' + containerId);
+    var testEl = document.getElementById('reportTestFilter' + containerId);
+    var appEl = document.getElementById('reportAppFilter' + containerId);
+    var startEl = document.getElementById('reportStartDate' + containerId);
+    var endEl = document.getElementById('reportEndDate' + containerId);
+    
+    var batch = batchEl ? batchEl.value : '';
+    var testNumber = testEl ? testEl.value : '';
+    var application = appEl ? appEl.value : '';
+    var startDate = startEl ? startEl.value : '';
+    var endDate = endEl ? endEl.value : '';
+    
+    // Update filter state
+    reportsFilterState = { 
+      batch: batch, 
+      testNumber: testNumber, 
+      application: application, 
+      startDate: startDate, 
+      endDate: endDate 
+    };
+    
+    // Show loading in table container
+    var tableContainer = document.getElementById('reportsTableContainer' + containerId);
+    if (tableContainer) {
+      tableContainer.innerHTML = '<div class="loading" style="padding: 40px; text-align: center;"><i class="fas fa-spinner fa-spin" style="font-size: 24px; color: var(--primary-color);"></i><p>Applying filters...</p></div>';
+    }
+    
+    // Call backend with filters
+    google.script.run
+      .withSuccessHandler(function(data) {
+        // Update tiles
+        var tiles = data.tiles || { totalEvaluations: 0, totalPassed: 0, totalFailed: 0 };
+        var totalEvalEl = document.getElementById('tileTotalEvaluations');
+        var totalPassEl = document.getElementById('tileTotalPassed');
+        var totalFailEl = document.getElementById('tileTotalFailed');
+        
+        if (totalEvalEl) totalEvalEl.textContent = tiles.totalEvaluations;
+        if (totalPassEl) totalPassEl.textContent = tiles.totalPassed;
+        if (totalFailEl) totalFailEl.textContent = tiles.totalFailed;
+        
+        // Update table
+        if (tableContainer) {
+          tableContainer.innerHTML = renderReportsTable(data.reports || [], containerId);
+        }
+        
+        // Update certifications count
+        var certCountEl = document.getElementById('tileTotalCertifications');
+        if (certCountEl && data.tiles) {
+          certCountEl.textContent = data.tiles.totalCertifications || 0;
+        }
+        
+        // Update certifications table
+        var certContainer = document.getElementById('certificationsTableContainer' + containerId);
+        if (certContainer && data.certifications) {
+          certContainer.innerHTML = renderCertificationsTable(data.certifications, containerId);
+          window['certificationsData_' + containerId] = data.certifications;
+        }
+      })
+      .withFailureHandler(function(error) {
+        if (tableContainer) {
+          tableContainer.innerHTML = '<div class="empty-state" style="padding: 40px; text-align: center;"><i class="fas fa-exclamation-circle" style="font-size: 48px; color: var(--danger-color); margin-bottom: 15px;"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+        }
+      })
+      .getReportsAndCertificationData(reportsFilterState);
+  }
+
+  function clearReportsFilters(containerId) {
+    // Clear all filter inputs
+    var batchEl = document.getElementById('reportBatchFilter' + containerId);
+    var testEl = document.getElementById('reportTestFilter' + containerId);
+    var appEl = document.getElementById('reportAppFilter' + containerId);
+    var startEl = document.getElementById('reportStartDate' + containerId);
+    var endEl = document.getElementById('reportEndDate' + containerId);
+    
+    if (batchEl) batchEl.value = '';
+    if (testEl) testEl.value = '';
+    if (appEl) appEl.value = '';
+    if (startEl) startEl.value = '';
+    if (endEl) endEl.value = '';
+    
+    // Reset filter state and reload
+    reportsFilterState = { batch: '', testNumber: '', application: '', startDate: '', endDate: '' };
+    applyReportsFilters(containerId);
+  }
+
+  function exportEnhancedReports(containerId) {
+    showLoading(true);
+    
+    google.script.run
+      .withSuccessHandler(function(csvContent) {
+        showLoading(false);
+        var filename = 'reports_' + new Date().toISOString().split('T')[0] + '.csv';
+        downloadCSV(csvContent, filename);
+        showToast('Reports exported successfully!', 'success');
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error exporting reports: ' + error.message, 'error');
+      })
+      .exportReportsCSV(reportsFilterState);
+  }
+
+  // Legacy function - redirect to enhanced view
+  function renderQuizTestReportsView(categoryName, batches) {
+    loadQuizTestReports(categoryName);
+  }
+
+  function loadQuizResultsByBatch() {
+    const batch = document.getElementById('reportBatchFilter').value;
+    const scoreFilter = document.getElementById('reportScoreFilter').value;
+    const container = document.getElementById('quizResultsContainer');
+    
+    container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading results...</p></div>';
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderQuizResults(data, 'quizResultsContainer', scoreFilter);
+      })
+      .withFailureHandler(function(error) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getQuizResultsForTrainer({ batch: batch });
+  }
+
+  function loadQuizResultsByBatchILT() {
+    const batch = document.getElementById('reportBatchFilterILT').value;
+    const scoreFilter = document.getElementById('reportScoreFilterILT').value;
+    const container = document.getElementById('quizResultsContainerILT');
+    
+    container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading results...</p></div>';
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderQuizResults(data, 'quizResultsContainerILT', scoreFilter);
+      })
+      .withFailureHandler(function(error) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getQuizResultsForTrainer({ batch: batch });
+  }
+
+  function renderQuizResults(data, containerId, scoreFilter) {
+    const container = document.getElementById(containerId);
+    
+    let results = data.results || [];
+    
+    // Apply score filter
+    if (scoreFilter === 'passed') {
+      results = results.filter(r => r.scorePercent >= 70);
+    } else if (scoreFilter === 'failed') {
+      results = results.filter(r => r.scorePercent < 70);
+    }
+    
+    if (results.length === 0) {
+      container.innerHTML = '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>No Results</h3><p>No quiz results found for the selected criteria.</p></div>';
+      return;
+    }
+    
+    container.innerHTML = `
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Batch</th>
+              <th>Trainee</th>
+              <th>Application</th>
+              <th>Test</th>
+              <th>Score</th>
+              <th>Time Taken</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${results.map(r => `
+              <tr>
+                <td>${r.batch || '-'}</td>
+                <td>${r.traineeName}<br><small>${r.traineeEmail}</small></td>
+                <td>${r.application}</td>
+                <td>${r.testNumber}</td>
+                <td><strong>${r.correctCount}/${r.totalQuestions}</strong> (${r.scorePercent}%)</td>
+                <td>${formatTime(r.timeTaken)}</td>
+                <td>${r.submittedDate}</td>
+                <td><span class="status-badge ${r.scorePercent >= 70 ? 'passed' : 'failed'}">${r.scorePercent >= 70 ? 'Passed' : 'Failed'}</span></td>
+                <td>
+                  <button class="btn btn-sm btn-outline" onclick="viewQuizResultDetails('${r.resultId}')">
+                    <i class="fas fa-eye"></i> View
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function formatTime(seconds) {
+    if (!seconds) return '-';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  }
+
+  function viewQuizResultDetails(resultId) {
+    showLoading(true);
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        showLoading(false);
+        showQuizResultDetailsModal(data);
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .getQuizResultDetails(resultId);
+  }
+
+  function showQuizResultDetailsModal(data) {
+    const modal = document.getElementById('quizResultDetailsModal');
+    
+    document.getElementById('resultDetailTrainee').textContent = `${data.traineeName} (${data.traineeEmail})`;
+    document.getElementById('resultDetailQuiz').textContent = `${data.application} - ${data.testNumber}`;
+    document.getElementById('resultDetailScore').textContent = `${data.correctCount}/${data.totalQuestions} (${data.scorePercent}%)`;
+    document.getElementById('resultDetailTime').textContent = formatTime(data.timeTaken);
+    document.getElementById('resultDetailDate').textContent = data.submittedDate;
+    
+    const detailsContainer = document.getElementById('resultDetailAnswers');
+    detailsContainer.innerHTML = (data.details || []).map((d, i) => `
+      <div class="result-detail-item ${d.isCorrect ? 'correct' : 'incorrect'}">
+        <div class="detail-question">
+          <span class="q-number">Q${i + 1}.</span>
+          <span class="q-text">${d.question}</span>
+        </div>
+        <div class="detail-answers">
+          <div class="answer-row">
+            <span class="answer-label">Trainee's Answer:</span>
+            <span class="answer-value ${d.isCorrect ? 'correct' : 'incorrect'}">${d.yourAnswer || 'Not answered'}</span>
+          </div>
+          <div class="answer-row">
+            <span class="answer-label">Correct Answer:</span>
+            <span class="answer-value correct">${d.correctAnswer}</span>
+          </div>
+        </div>
+        <div class="detail-status">
+          ${d.isCorrect 
+            ? '<i class="fas fa-check-circle" style="color: var(--secondary-color); font-size: 24px;"></i>' 
+            : '<i class="fas fa-times-circle" style="color: var(--danger-color); font-size: 24px;"></i>'}
+        </div>
+      </div>
+    `).join('');
+    
+    modal.classList.add('active');
+  }
+
+  function closeQuizResultDetailsModal() {
+    document.getElementById('quizResultDetailsModal').classList.remove('active');
+  }
+
+  function exportQuizResults() {
+    const batch = document.getElementById('reportBatchFilter').value;
+    showLoading(true);
+    
+    google.script.run
+      .withSuccessHandler(function(csvContent) {
+        showLoading(false);
+        downloadCSV(csvContent, `quiz_results_${batch || 'all'}_${new Date().toISOString().split('T')[0]}.csv`);
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .exportQuizResultsCSV({ batch: batch });
+  }
+
+  function exportQuizResultsILT() {
+    const batch = document.getElementById('reportBatchFilterILT').value;
+    showLoading(true);
+    
+    google.script.run
+      .withSuccessHandler(function(csvContent) {
+        showLoading(false);
+        downloadCSV(csvContent, `quiz_results_${batch || 'all'}_${new Date().toISOString().split('T')[0]}.csv`);
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .exportQuizResultsCSV({ batch: batch });
+  }
+
+  function downloadCSV(content, filename) {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+  }
+
+  // ==================== SUBSECTION MODAL ====================
+
+  function openAddSubsectionModal(categoryName) {
+    document.getElementById('addSubsectionCategoryName').textContent = categoryName;
+    document.getElementById('addSubsectionModal').classList.add('active');
+  }
+
+  function closeAddSubsectionModal() {
+    document.getElementById('addSubsectionModal').classList.remove('active');
+    document.getElementById('addSubsectionInput').value = '';
+  }
+
+  function addSubsectionFromModal() {
+    const categoryName = document.getElementById('addSubsectionCategoryName').textContent;
+    const subsectionName = document.getElementById('addSubsectionInput').value.trim();
+
+    if (!subsectionName) {
+      showToast('Please enter a subsection name', 'warning');
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res.success) {
+          showToast(res.message, 'success');
+          closeAddSubsectionModal();
+        } else {
+          showToast(res.message, 'error');
+        }
+      })
+      .withFailureHandler(function(err) {
+        showToast('Error: ' + err.message, 'error');
+      })
+      .addSubsection(categoryName, subsectionName, currentUser?.email || '');
+  }
+
+  // ==================== CERTIFICATION FUNCTIONS ====================
+
+  // Store for certification form data
+  let certificationEmployees = [];
+
+  function showReportsTab(tabName, containerId) {
+    const evalTab = document.getElementById('evalReportsTab' + containerId);
+    const certTab = document.getElementById('certReportsTab' + containerId);
+    const evalPanel = document.getElementById('evaluationsPanel' + containerId);
+    const certPanel = document.getElementById('certificationsPanel' + containerId);
+    const filtersSection = evalPanel?.previousElementSibling;
+    
+    if (tabName === 'evaluations') {
+      evalTab?.classList.add('active');
+      evalTab?.classList.remove('btn-outline');
+      evalTab?.classList.add('btn-primary');
+      certTab?.classList.remove('active');
+      certTab?.classList.add('btn-outline');
+      certTab?.classList.remove('btn-primary');
+      if (evalPanel) evalPanel.style.display = 'block';
+      if (certPanel) certPanel.style.display = 'none';
+      // Show filters for evaluations
+      const filtersDiv = document.querySelector('#' + containerId + ' .reports-filters, .reports-filters');
+      if (filtersDiv) filtersDiv.style.display = 'block';
+    } else {
+      certTab?.classList.add('active');
+      certTab?.classList.remove('btn-outline');
+      certTab?.classList.add('btn-primary');
+      evalTab?.classList.remove('active');
+      evalTab?.classList.add('btn-outline');
+      evalTab?.classList.remove('btn-primary');
+      if (evalPanel) evalPanel.style.display = 'none';
+      if (certPanel) certPanel.style.display = 'block';
+      // Hide filters for certifications (or show different filters)
+      const filtersDiv = document.querySelector('#' + containerId + ' .reports-filters, .reports-filters');
+      if (filtersDiv) filtersDiv.style.display = 'none';
+    }
+  }
+
+  function renderCertificationsTable(certifications, containerId) {
+    if (!certifications || certifications.length === 0) {
+      return '<div class="empty-state" style="padding: 40px; text-align: center;"><i class="fas fa-certificate" style="font-size: 48px; color: var(--gray-color); margin-bottom: 15px;"></i><h3>No Certifications Found</h3><p>No certifications have been issued yet.</p></div>';
+    }
+    
+    let tableHtml = '<div class="data-table-container" style="background: var(--white); border-radius: var(--border-radius); box-shadow: var(--shadow); overflow: hidden;">';
+    tableHtml += '<table class="data-table" style="width: 100%; border-collapse: collapse;">';
+    tableHtml += '<thead><tr style="background: var(--background);">';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Certificate ID</th>';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Employee Name</th>';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Email</th>';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Batch</th>';
+    tableHtml += '<th style="padding: 15px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Application</th>';
+    tableHtml += '<th style="padding: 15px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Issue Date</th>';
+    tableHtml += '<th style="padding: 15px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Expiry Date</th>';
+    tableHtml += '<th style="padding: 15px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Status</th>';
+    tableHtml += '<th style="padding: 15px; text-align: center; font-weight: 600; border-bottom: 2px solid var(--light-gray);">Download</th>';
+    tableHtml += '</tr></thead><tbody>';
+    
+    certifications.forEach(function(c) {
+      const today = new Date();
+      const expiryDate = c.expiryDate ? new Date(c.expiryDate) : null;
+      const isExpired = expiryDate && expiryDate < today;
+      const statusStyle = isExpired 
+        ? 'background: rgba(234, 67, 53, 0.1); color: #ea4335;' 
+        : 'background: rgba(52, 168, 83, 0.1); color: #34a853;';
+      const statusText = isExpired ? 'Expired' : 'Active';
+      const statusIcon = isExpired ? '<i class="fas fa-times-circle"></i>' : '<i class="fas fa-check-circle"></i>';
+      
+      tableHtml += '<tr style="border-bottom: 1px solid var(--light-gray);">';
+      tableHtml += '<td style="padding: 12px 15px; font-family: monospace;">' + (c.certificateId || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px; font-weight: 500;">' + (c.employeeName || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px; color: var(--gray-color); font-size: 13px;">' + (c.email || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px;">' + (c.batchNumber || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px;">' + (c.application || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px; text-align: center;">' + (c.issueDate || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px; text-align: center;">' + (c.expiryDate || '-') + '</td>';
+      tableHtml += '<td style="padding: 12px 15px; text-align: center;"><span class="status-badge" style="padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; ' + statusStyle + '">' + statusIcon + ' ' + statusText + '</span></td>';
+      tableHtml += '<td style="padding: 12px 15px; text-align: center;"><button class="btn btn-sm btn-primary" onclick="downloadCertificate(\'' + c.certificateId + '\')" style="padding: 6px 12px;"><i class="fas fa-download"></i> Download</button></td>';
+      tableHtml += '</tr>';
+    });
+    
+    tableHtml += '</tbody></table></div>';
+    tableHtml += '<div style="margin-top: 15px; padding: 10px; background: var(--background); border-radius: var(--border-radius); text-align: right; font-size: 13px; color: var(--gray-color);">Showing ' + certifications.length + ' certification(s)</div>';
+    
+    return tableHtml;
+  }
+
+  function openAddCertificationModal() {
+    document.getElementById('addCertificationModal').classList.add('active');
+    
+    // Reset form
+    document.getElementById('certEmployeeSelect').innerHTML = '<option value="">Loading employees...</option>';
+    document.getElementById('certEmployeeEmail').value = '';
+    document.getElementById('certBatchSelect').innerHTML = '<option value="">Loading batches...</option>';
+    document.getElementById('certApplicationSelect').innerHTML = '<option value="">Loading applications...</option>';
+    document.getElementById('certIssueDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('certExpiryDate').value = '';
+    
+    // Load employees registered for training
+    google.script.run
+      .withSuccessHandler(function(employees) {
+        certificationEmployees = employees || [];
+        const select = document.getElementById('certEmployeeSelect');
+        select.innerHTML = '<option value="">Select Employee</option>' +
+          certificationEmployees.map(e => '<option value="' + e.email + '" data-name="' + e.name + '">' + e.name + ' (' + e.email + ')</option>').join('');
+      })
+      .withFailureHandler(function(error) {
+        showToast('Error loading employees: ' + error.message, 'error');
+        document.getElementById('certEmployeeSelect').innerHTML = '<option value="">Error loading employees</option>';
+      })
+      .getRegisteredTrainingEmployees();
+    
+    // Load batches
+    google.script.run
+      .withSuccessHandler(function(batches) {
+        const select = document.getElementById('certBatchSelect');
+        select.innerHTML = '<option value="">Select Batch</option>' +
+          (batches || []).map(b => '<option value="' + b + '">' + b + '</option>').join('');
+      })
+      .getAllBatches();
+    
+    // Load applications
+    google.script.run
+      .withSuccessHandler(function(opts) {
+        const select = document.getElementById('certApplicationSelect');
+        select.innerHTML = '<option value="">Select Application</option>' +
+          (opts.applications || []).map(a => '<option value="' + a + '">' + a + '</option>').join('');
+      })
+      .getDropdownOptions();
+  }
+
+  function closeAddCertificationModal() {
+    document.getElementById('addCertificationModal').classList.remove('active');
+  }
+
+  function onCertEmployeeChange() {
+    const select = document.getElementById('certEmployeeSelect');
+    const email = select.value;
+    document.getElementById('certEmployeeEmail').value = email;
+  }
+
+  function generateCertification() {
+    const employeeSelect = document.getElementById('certEmployeeSelect');
+    const employeeEmail = document.getElementById('certEmployeeEmail').value;
+    const employeeName = employeeSelect.options[employeeSelect.selectedIndex]?.getAttribute('data-name') || '';
+    const batchNumber = document.getElementById('certBatchSelect').value;
+    const application = document.getElementById('certApplicationSelect').value;
+    const issueDate = document.getElementById('certIssueDate').value;
+    const expiryDate = document.getElementById('certExpiryDate').value;
+    
+    if (!employeeEmail) {
+      showToast('Please select an employee', 'warning');
+      return;
+    }
+    if (!batchNumber) {
+      showToast('Please select a batch number', 'warning');
+      return;
+    }
+    if (!application) {
+      showToast('Please select an application', 'warning');
+      return;
+    }
+    if (!issueDate) {
+      showToast('Please select issue date', 'warning');
+      return;
+    }
+    if (!expiryDate) {
+      showToast('Please select expiry date', 'warning');
+      return;
+    }
+    
+    showLoading(true);
+    
+    const certData = {
+      employeeName: employeeName,
+      email: employeeEmail,
+      batchNumber: batchNumber,
+      application: application,
+      issueDate: issueDate,
+      expiryDate: expiryDate,
+      issuedBy: currentUser?.email || ''
+    };
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        showLoading(false);
+        if (result.success) {
+          showToast('Certificate generated successfully!', 'success');
+          closeAddCertificationModal();
+          
+          // Refresh the reports view
+          if (currentActiveCategory) {
+            loadQuizTestReports(currentActiveCategory);
+          } else {
+            loadQuizTestReportsILT();
+          }
+          
+          // Optionally download the certificate immediately
+          if (result.certificateId) {
+            downloadCertificate(result.certificateId);
+          }
+        } else {
+          showToast(result.message || 'Failed to generate certificate', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .generateIndividualCertification(certData);
+  }
+
+  function downloadCertificate(certificateId) {
+    showLoading(true);
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        showLoading(false);
+        if (result.success && result.htmlContent) {
+          // Open certificate in new window for printing/saving
+          const printWindow = window.open('', '_blank');
+          printWindow.document.write(result.htmlContent);
+          printWindow.document.close();
+          showToast('Certificate opened in new window', 'success');
+        } else {
+          showToast(result.message || 'Failed to generate certificate', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .getCertificateHTML(certificateId);
+  }
+
+  function downloadEvaluationReport(resultId) {
+    showLoading(true);
+    
+    google.script.run
+      .withSuccessHandler(function(result) {
+        showLoading(false);
+        if (result.success && result.htmlContent) {
+          // Open report in new window for printing/saving
+          const printWindow = window.open('', '_blank');
+          printWindow.document.write(result.htmlContent);
+          printWindow.document.close();
+          showToast('Evaluation report opened in new window', 'success');
+        } else {
+          showToast(result.message || 'Failed to generate report', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        showLoading(false);
+        showToast('Error: ' + error.message, 'error');
+      })
+      .getEvaluationReportHTML(resultId);
+  }
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    // Any initialization code
+  });
+</script>
