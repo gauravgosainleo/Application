@@ -1572,7 +1572,15 @@
     google.script.run
       .withSuccessHandler(function(result) {
         if (result.success) {
-          // Create progress entries
+          // For SBL: videos are assigned in the backend, no need for progress entries
+          if (trainingData.category.toLowerCase() === 'sbl') {
+            showLoading(false);
+            showToast('SBL Training saved and videos assigned!', 'success');
+            closeAddTrainingModal();
+            loadCalendarEvents();
+            return;
+          }
+          // For other categories: Create ILT-style progress entries
           google.script.run
             .withSuccessHandler(function() {
               showLoading(false);
@@ -2161,6 +2169,8 @@
     }
   }
 
+  // ==================== SBL DASHBOARD ====================
+
   function loadSBLDashboard() {
     google.script.run
       .withSuccessHandler(renderSBLDashboard)
@@ -2173,11 +2183,13 @@
 
   function renderSBLDashboard(data) {
     const content = document.getElementById('sblContent');
+    const isTrainer = currentUser && currentUser.type && currentUser.type.toLowerCase() === 'trainer';
+
     content.innerHTML = `
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-icon blue"><i class="fas fa-video"></i></div>
-          <div class="stat-info"><h3>${data.totalVideos || 0}</h3><p>Total Videos</p></div>
+          <div class="stat-info"><h3>${data.totalVideos || 0}</h3><p>Total Videos Assigned</p></div>
         </div>
         <div class="stat-card">
           <div class="stat-icon green"><i class="fas fa-eye"></i></div>
@@ -2187,45 +2199,415 @@
           <div class="stat-icon yellow"><i class="fas fa-check-circle"></i></div>
           <div class="stat-info"><h3>${data.completedVideos || 0}</h3><p>Completed</p></div>
         </div>
+        ${isTrainer ? `
+        <div class="stat-card">
+          <div class="stat-icon purple"><i class="fas fa-users"></i></div>
+          <div class="stat-info"><h3>${data.totalTrainees || 0}</h3><p>Total Trainees</p></div>
+        </div>
+        ` : ''}
       </div>
+      ${data.totalVideos > 0 ? `
+      <div class="sub-content" style="margin-top:20px;">
+        <h3 style="margin-bottom:15px;font-size:16px;font-weight:600;"><i class="fas fa-chart-bar" style="color:var(--primary-color);margin-right:8px;"></i>Overall Progress</h3>
+        <div class="progress-bar" style="height:12px;margin-bottom:10px;">
+          <div class="progress" style="width:${data.totalVideos > 0 ? Math.round((data.completedVideos / data.totalVideos) * 100) : 0}%;background:var(--secondary-color);"></div>
+        </div>
+        <p style="font-size:13px;color:var(--gray-color);">${data.totalVideos > 0 ? Math.round((data.completedVideos / data.totalVideos) * 100) : 0}% videos completed (${data.completedVideos} of ${data.totalVideos})</p>
+      </div>
+      ` : ''}
     `;
   }
 
+  // ==================== SBL VIDEOS ====================
+
   function loadSBLVideos() {
+    const isTrainer = currentUser && currentUser.type && currentUser.type.toLowerCase() === 'trainer';
+    if (isTrainer) {
+      loadSBLTrainerVideos();
+    } else {
+      loadSBLTraineeVideos();
+    }
+  }
+
+  // --- Trainer: Batch list ---
+  function loadSBLTrainerVideos() {
     google.script.run
-      .withSuccessHandler(renderSBLVideos)
+      .withSuccessHandler(renderSBLBatches)
       .withFailureHandler(function(error) {
         document.getElementById('sblContent').innerHTML =
           '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
       })
-      .getSBLVideosData();
+      .getSBLBatchesData();
   }
 
-  function renderSBLVideos(data) {
+  function renderSBLBatches(data) {
     const content = document.getElementById('sblContent');
-    if (!data || !data.videos || data.videos.length === 0) {
-      content.innerHTML = `<div class="empty-state"><i class="fas fa-video"></i><h3>No Videos</h3><p>No SBL videos available yet.</p></div>`;
+    if (!data || !data.batches || data.batches.length === 0) {
+      content.innerHTML = '<div class="empty-state"><i class="fas fa-video"></i><h3>No SBL Batches</h3><p>No SBL training batches found. Add a training with SBL category to get started.</p></div>';
       return;
     }
 
     content.innerHTML = `
-      <div class="data-table-container">
-        <table class="data-table">
-          <thead><tr><th>Title</th><th>Description</th><th>Duration</th><th>Views</th></tr></thead>
-          <tbody>
-            ${data.videos.map(v => `
-              <tr>
-                <td>${v.title || '-'}</td>
-                <td>${v.description || '-'}</td>
-                <td>${v.duration || '-'}</td>
-                <td>${v.views || 0}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+      <div class="progress-section">
+        <div class="progress-header">
+          <h3><i class="fas fa-layer-group"></i> SBL Batches</h3>
+        </div>
+        <div class="trainings-grid">
+          ${data.batches.map(b => `
+            <div class="training-card sbl-batch-card" onclick="loadSBLBatchDetail('${b.batch}')" style="cursor:pointer;">
+              <div class="training-card-header">
+                <h4>${b.application || 'Unknown'}</h4>
+                <span class="batch-badge">${b.batch}</span>
+              </div>
+              <div class="training-card-body">
+                <p><i class="fas fa-users"></i> ${b.traineeCount} Trainee(s)</p>
+                <p><i class="fas fa-video"></i> ${b.totalVideos} Videos Assigned</p>
+                <p><i class="fas fa-eye"></i> ${b.watchingVideos} Watching</p>
+                <p><i class="fas fa-check-circle"></i> ${b.completedVideos} Completed</p>
+                <p><i class="fas fa-calendar-alt"></i> ${b.startDate || '-'} to ${b.endDate || '-'}</p>
+              </div>
+              <div class="training-card-footer">
+                <div class="progress-bar" style="height:8px;margin-bottom:5px;">
+                  <div class="progress" style="width:${b.progressPercent}%;background:var(--secondary-color);"></div>
+                </div>
+                <span style="font-size:12px;color:var(--gray-color);">${b.progressPercent}% Complete</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   }
+
+  // --- Trainer: Batch detail - trainees and their video progress ---
+  function loadSBLBatchDetail(batch) {
+    const content = document.getElementById('sblContent');
+    content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Loading batch details...</p></div>';
+
+    google.script.run
+      .withSuccessHandler(function(data) { renderSBLBatchDetail(data, batch); })
+      .withFailureHandler(function(error) {
+        content.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getSBLBatchTraineesProgress(batch);
+  }
+
+  function renderSBLBatchDetail(data, batch) {
+    const content = document.getElementById('sblContent');
+    if (!data || !data.trainees || data.trainees.length === 0) {
+      content.innerHTML = `
+        <div>
+          <button class="btn btn-outline" onclick="loadSBLTrainerVideos()" style="margin-bottom:20px;"><i class="fas fa-arrow-left"></i> Back to Batches</button>
+          <div class="empty-state"><i class="fas fa-users"></i><h3>No Trainees</h3><p>No trainees found in batch ${batch}.</p></div>
+        </div>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div class="progress-section">
+        <button class="btn btn-outline" onclick="loadSBLTrainerVideos()" style="margin-bottom:20px;"><i class="fas fa-arrow-left"></i> Back to Batches</button>
+        <div class="progress-header">
+          <h3><i class="fas fa-users"></i> Batch ${batch} - ${data.trainees[0].application || ''}</h3>
+        </div>
+        ${data.trainees.map(trainee => `
+          <div class="sbl-trainee-section" style="margin-bottom:25px;border:1px solid var(--light-gray);border-radius:var(--border-radius-lg);overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 20px;background:var(--background);cursor:pointer;flex-wrap:wrap;gap:10px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none';">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div class="trainee-avatar">${(trainee.name || '?')[0].toUpperCase()}</div>
+                <div>
+                  <h4 style="font-size:14px;font-weight:600;margin:0;">${trainee.name}</h4>
+                  <p style="font-size:12px;color:var(--gray-color);margin:0;">${trainee.email}</p>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:15px;">
+                <span style="font-size:12px;color:var(--gray-color);">${trainee.completedVideos}/${trainee.totalVideos} completed</span>
+                <div class="progress-bar" style="width:100px;height:8px;">
+                  <div class="progress" style="width:${trainee.progressPercent}%;background:var(--secondary-color);"></div>
+                </div>
+                <span style="font-size:13px;font-weight:600;color:var(--secondary-color);">${trainee.progressPercent}%</span>
+                <i class="fas fa-chevron-down toggle-icon"></i>
+              </div>
+            </div>
+            <div style="display:none;padding:15px 20px;">
+              <table class="data-table" style="margin:0;">
+                <thead>
+                  <tr>
+                    <th>Video Title</th>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th>Completed</th>
+                    <th>Marked By</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${trainee.videos.map(v => `
+                    <tr>
+                      <td><i class="fas fa-play-circle" style="color:var(--sbl-color);margin-right:6px;"></i>${v.title}</td>
+                      <td><span class="status-badge ${v.status === 'Completed' ? 'completed' : (v.status === 'Watching' ? 'in-progress' : 'pending')}">${v.status}</span></td>
+                      <td>${v.startedDate || '-'}</td>
+                      <td>${v.completedDate || '-'}</td>
+                      <td>${v.markedBy || '-'}</td>
+                      <td>
+                        ${v.status !== 'Completed' ? `<button class="btn btn-success btn-sm" onclick="trainerMarkSBLComplete('${trainee.email}', '${batch}', '${v.title.replace(/'/g, "\\'")}')"><i class="fas fa-check"></i> Mark Complete</button>` : '<span style="color:var(--secondary-color);font-weight:600;"><i class="fas fa-check-circle"></i> Done</span>'}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  // --- Trainer: Mark video complete ---
+  function trainerMarkSBLComplete(traineeEmail, batch, videoTitle) {
+    if (!confirm('Mark this video as complete for this trainee?')) return;
+
+    showLoading();
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result.success) {
+          showToast('Video marked as complete', 'success');
+          loadSBLBatchDetail(batch);
+        } else {
+          showToast(result.message || 'Error marking video', 'error');
+        }
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        showToast('Error: ' + error.message, 'error');
+      })
+      .markSBLVideoComplete(traineeEmail, batch, videoTitle, currentUser.email);
+  }
+
+  // --- Trainee: Video list ---
+  function loadSBLTraineeVideos() {
+    google.script.run
+      .withSuccessHandler(renderSBLTraineeVideos)
+      .withFailureHandler(function(error) {
+        document.getElementById('sblContent').innerHTML =
+          '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Error</h3><p>' + error.message + '</p></div>';
+      })
+      .getSBLTraineeVideos(currentUser.email);
+  }
+
+  function renderSBLTraineeVideos(data) {
+    const content = document.getElementById('sblContent');
+    if (!data || !data.videos || data.videos.length === 0) {
+      content.innerHTML = '<div class="empty-state"><i class="fas fa-video"></i><h3>No Videos Assigned</h3><p>You have no SBL videos assigned yet.</p></div>';
+      return;
+    }
+
+    // Group videos by batch + application
+    const groups = {};
+    data.videos.forEach(v => {
+      const key = v.batch + '|' + v.application;
+      if (!groups[key]) {
+        groups[key] = { batch: v.batch, application: v.application, videos: [] };
+      }
+      groups[key].videos.push(v);
+    });
+
+    let html = '';
+    Object.values(groups).forEach(group => {
+      const completed = group.videos.filter(v => v.status === 'Completed').length;
+      const total = group.videos.length;
+      const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      html += `
+        <div class="sub-content" style="margin-bottom:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px;flex-wrap:wrap;gap:10px;">
+            <div>
+              <h3 style="font-size:16px;font-weight:600;margin:0;"><i class="fas fa-film" style="color:var(--sbl-color);margin-right:8px;"></i>${group.application}</h3>
+              <p style="font-size:12px;color:var(--gray-color);margin:3px 0 0;">Batch: ${group.batch}</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="progress-bar" style="width:120px;height:8px;">
+                <div class="progress" style="width:${pct}%;background:var(--secondary-color);"></div>
+              </div>
+              <span style="font-size:13px;font-weight:600;color:var(--secondary-color);">${pct}%</span>
+            </div>
+          </div>
+          <div class="sbl-video-grid">
+            ${group.videos.map(v => `
+              <div class="sbl-video-card ${v.status === 'Completed' ? 'completed' : ''}">
+                <div class="sbl-video-thumb" onclick="openSBLVideoPlayer('${v.url}', '${v.title.replace(/'/g, "\\'")}', '${v.batch}', '${v.status}')">
+                  <i class="fas fa-play-circle sbl-play-icon"></i>
+                </div>
+                <div class="sbl-video-info">
+                  <h4>${v.title}</h4>
+                  <span class="status-badge ${v.status === 'Completed' ? 'completed' : (v.status === 'Watching' ? 'in-progress' : 'pending')}">${v.status}</span>
+                  ${v.completedDate ? '<p style="font-size:11px;color:var(--gray-color);margin-top:5px;">Completed: ' + v.completedDate + '</p>' : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    });
+
+    content.innerHTML = html;
+  }
+
+  // --- Trainee: Video player ---
+  function openSBLVideoPlayer(url, title, batch, currentStatus) {
+    if (!url) {
+      showToast('No video URL available', 'error');
+      return;
+    }
+
+    const modal = document.getElementById('sblVideoPlayerModal');
+    const videoContainer = document.getElementById('sblVideoContainer');
+    const titleEl = document.getElementById('sblVideoTitle');
+
+    titleEl.textContent = title;
+
+    // Mark as watching when trainee starts the video
+    if (currentUser.type.toLowerCase() === 'trainee' && currentStatus !== 'Completed') {
+      google.script.run.startSBLVideo(currentUser.email, batch, title);
+    }
+
+    // Determine video type and embed accordingly
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const isDrive = url.includes('drive.google.com');
+    const isTrainee = currentUser.type.toLowerCase() === 'trainee';
+
+    if (isYouTube) {
+      let videoId = '';
+      if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split('?')[0];
+      } else if (url.includes('v=')) {
+        videoId = url.split('v=')[1].split('&')[0];
+      }
+      videoContainer.innerHTML = '<iframe id="sblVideoFrame" src="https://www.youtube.com/embed/' + videoId + '?rel=0&modestbranding=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen style="width:100%;height:100%;"></iframe>';
+    } else if (isDrive) {
+      let fileId = '';
+      if (url.includes('/d/')) {
+        fileId = url.split('/d/')[1].split('/')[0];
+      } else if (url.includes('id=')) {
+        fileId = url.split('id=')[1].split('&')[0];
+      }
+      videoContainer.innerHTML = '<iframe id="sblVideoFrame" src="https://drive.google.com/file/d/' + fileId + '/preview" frameborder="0" allow="autoplay" allowfullscreen style="width:100%;height:100%;"></iframe>';
+    } else {
+      // Direct video URL - use HTML5 video with forward prevention for trainees
+      videoContainer.innerHTML = '<video id="sblVideoElement" src="' + url + '" ' + (isTrainee ? '' : 'controls') + ' style="width:100%;height:100%;background:#000;" ' + (isTrainee ? 'controlsList="nodownload nofullscreen"' : '') + '></video>';
+      const videoEl = document.getElementById('sblVideoElement');
+      if (videoEl) {
+        if (isTrainee) {
+          // Add custom controls without forward seek for trainee
+          setupTraineeVideoControls(videoEl);
+        }
+        videoEl.addEventListener('ended', function() {
+          if (isTrainee && currentStatus !== 'Completed') {
+            google.script.run
+              .withSuccessHandler(function(result) {
+                if (result.success) {
+                  showToast('Video completed!', 'success');
+                  loadSBLTraineeVideos();
+                }
+              })
+              .completeSBLVideo(currentUser.email, batch, title);
+          }
+        });
+      }
+    }
+
+    // Store current video info for mark complete button
+    modal.dataset.batch = batch;
+    modal.dataset.title = title;
+    modal.dataset.status = currentStatus;
+
+    // Show/hide mark complete button (trainer only)
+    const markBtn = document.getElementById('sblMarkCompleteBtn');
+    if (markBtn) {
+      markBtn.style.display = (currentUser.type.toLowerCase() === 'trainer') ? 'inline-flex' : 'none';
+    }
+
+    modal.classList.add('active');
+  }
+
+  function setupTraineeVideoControls(videoEl) {
+    // Prevent forward seeking - only allow backward seek
+    let lastAllowedTime = 0;
+
+    videoEl.addEventListener('timeupdate', function() {
+      if (videoEl.currentTime > lastAllowedTime + 1) {
+        videoEl.currentTime = lastAllowedTime;
+      } else {
+        lastAllowedTime = Math.max(lastAllowedTime, videoEl.currentTime);
+      }
+    });
+
+    // Add play/pause toggle
+    videoEl.addEventListener('click', function() {
+      if (videoEl.paused) {
+        videoEl.play();
+      } else {
+        videoEl.pause();
+      }
+    });
+
+    // Add basic controls bar below the video
+    const controlsBar = document.createElement('div');
+    controlsBar.className = 'sbl-trainee-controls';
+    controlsBar.innerHTML = `
+      <button onclick="document.getElementById('sblVideoElement').paused ? document.getElementById('sblVideoElement').play() : document.getElementById('sblVideoElement').pause();" class="btn btn-sm btn-primary">
+        <i class="fas fa-play"></i> Play / Pause
+      </button>
+      <span class="sbl-time-display" id="sblTimeDisplay">0:00 / 0:00</span>
+    `;
+    videoEl.parentElement.appendChild(controlsBar);
+
+    videoEl.addEventListener('timeupdate', function() {
+      const display = document.getElementById('sblTimeDisplay');
+      if (display) {
+        const current = formatVideoTime(videoEl.currentTime);
+        const total = formatVideoTime(videoEl.duration || 0);
+        display.textContent = current + ' / ' + total;
+      }
+    });
+  }
+
+  function formatVideoTime(seconds) {
+    if (isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return mins + ':' + (secs < 10 ? '0' : '') + secs;
+  }
+
+  function closeSBLVideoPlayer() {
+    const modal = document.getElementById('sblVideoPlayerModal');
+    const videoContainer = document.getElementById('sblVideoContainer');
+
+    // Stop any playing video
+    const videoEl = document.getElementById('sblVideoElement');
+    if (videoEl) videoEl.pause();
+
+    videoContainer.innerHTML = '';
+    modal.classList.remove('active');
+
+    // Refresh the video list
+    loadSBLVideos();
+  }
+
+  function trainerMarkVideoCompleteFromPlayer() {
+    const modal = document.getElementById('sblVideoPlayerModal');
+    const batch = modal.dataset.batch;
+    const title = modal.dataset.title;
+
+    if (!confirm('Mark this video as complete?')) return;
+
+    // For trainer, we need to know which trainee - in player context this is used from trainer video view
+    // In this case the trainer is viewing, so we just close and use the batch detail view
+    closeSBLVideoPlayer();
+    showToast('Use the batch detail view to mark videos complete for specific trainees', 'info');
+  }
+
+  // ==================== SBL EVALUATIONS ====================
 
   function loadSBLEvaluations() {
     google.script.run
@@ -2240,7 +2622,7 @@
   function renderSBLEvaluations(data) {
     const content = document.getElementById('sblContent');
     if (!data || !data.evaluations || data.evaluations.length === 0) {
-      content.innerHTML = `<div class="empty-state"><i class="fas fa-star"></i><h3>No Evaluations</h3><p>No SBL evaluations available yet.</p></div>`;
+      content.innerHTML = '<div class="empty-state"><i class="fas fa-star"></i><h3>No Evaluations</h3><p>No SBL evaluations available yet.</p></div>';
       return;
     }
 
@@ -2263,6 +2645,8 @@
     `;
   }
 
+  // ==================== SBL REPORTS ====================
+
   function loadSBLReports() {
     google.script.run
       .withSuccessHandler(renderSBLReports)
@@ -2276,7 +2660,7 @@
   function renderSBLReports(data) {
     const content = document.getElementById('sblContent');
     if (!data || !data.certifications || data.certifications.length === 0) {
-      content.innerHTML = `<div class="empty-state"><i class="fas fa-certificate"></i><h3>No Certifications</h3><p>No SBL certifications available yet.</p></div>`;
+      content.innerHTML = '<div class="empty-state"><i class="fas fa-certificate"></i><h3>No Certifications</h3><p>No SBL certifications available yet.</p></div>';
       return;
     }
 

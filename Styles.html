@@ -1849,13 +1849,150 @@
     .data-table-container {
       overflow-x: auto !important;
     }
-    
+
     .data-table {
       min-width: 800px !important;
     }
-    
+
     .stats-grid {
       grid-template-columns: 1fr !important;
+    }
+  }
+</style>
+
+<style>
+  /* ==================== SBL VIDEO MODULE STYLES ==================== */
+
+  /* Video Grid */
+  .sbl-video-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;
+    gap: 20px !important;
+  }
+
+  .sbl-video-card {
+    background: var(--white) !important;
+    border: 1px solid var(--light-gray) !important;
+    border-radius: var(--border-radius-lg) !important;
+    overflow: hidden !important;
+    transition: var(--transition) !important;
+  }
+
+  .sbl-video-card:hover {
+    border-color: var(--sbl-color) !important;
+    box-shadow: var(--shadow) !important;
+    transform: translateY(-2px) !important;
+  }
+
+  .sbl-video-card.completed {
+    border-color: rgba(52, 168, 83, 0.3) !important;
+    background: rgba(52, 168, 83, 0.02) !important;
+  }
+
+  .sbl-video-thumb {
+    width: 100% !important;
+    height: 140px !important;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    position: relative !important;
+    transition: var(--transition) !important;
+  }
+
+  .sbl-video-thumb:hover {
+    background: linear-gradient(135deg, #0f3460 0%, #1a1a2e 100%) !important;
+  }
+
+  .sbl-play-icon {
+    font-size: 48px !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    transition: var(--transition) !important;
+  }
+
+  .sbl-video-thumb:hover .sbl-play-icon {
+    color: white !important;
+    transform: scale(1.1) !important;
+  }
+
+  .sbl-video-info {
+    padding: 15px !important;
+  }
+
+  .sbl-video-info h4 {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: var(--dark-color) !important;
+    margin: 0 0 8px 0 !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Trainee video controls (no forward seek) */
+  .sbl-trainee-controls {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 10px 15px !important;
+    background: #1a1a2e !important;
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
+
+  .sbl-time-display {
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 13px !important;
+    font-family: monospace !important;
+  }
+
+  /* SBL Batch Card enhancements */
+  .sbl-batch-card {
+    border-left: 4px solid var(--sbl-color) !important;
+  }
+
+  .sbl-batch-card:hover {
+    border-left-color: var(--sbl-color) !important;
+  }
+
+  /* SBL Trainee Section */
+  .sbl-trainee-section .data-table {
+    font-size: 13px !important;
+  }
+
+  .sbl-trainee-section .data-table th {
+    font-size: 11px !important;
+  }
+
+  /* Video Player Modal enhancements */
+  #sblVideoPlayerModal .modal-content {
+    max-width: 900px !important;
+    border-radius: var(--border-radius-lg) !important;
+    overflow: hidden !important;
+  }
+
+  #sblVideoContainer {
+    position: relative !important;
+  }
+
+  #sblVideoContainer iframe,
+  #sblVideoContainer video {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  @media (max-width: 768px) {
+    .sbl-video-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    #sblVideoPlayerModal .modal-content {
+      max-width: 100% !important;
+    }
+
+    #sblVideoContainer {
+      height: 300px !important;
     }
   }
 </style>

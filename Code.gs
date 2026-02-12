@@ -50,8 +50,9 @@ function initializeSheets() {
     'ILT_Enrollments': ['Enrollment ID', 'Training ID', 'Trainee Email', 'Trainee Name', 'Enrollment Date', 'Status', 'Progress', 'Completion Date'],
     'ILT_Evaluations': ['Evaluation ID', 'Training ID', 'Trainee Email', 'Evaluator', 'Date', 'Score', 'Comments', 'Status'],
     'ILT_Certifications': ['Certification ID', 'Training ID', 'Trainee Email', 'Trainee Name', 'Issue Date', 'Expiry Date', 'Status'],
-    'SBL_Videos': ['Video ID', 'Title', 'Description', 'Category', 'Duration', 'URL', 'Thumbnail', 'Upload Date', 'Views', 'Status'],
-    'SBL_Progress': ['Progress ID', 'Video ID', 'Trainee Email', 'Watch Time', 'Completed', 'Last Watched', 'Score'],
+    'SBL': ['Application', 'Video Title', 'Video Description', 'Video URL'],
+    'SBL_Trainings': ['Batch', 'Category', 'Application', 'Trainee Name', 'Trainee Email', 'Level', 'Start Date', 'End Date', 'Duration (Days)'],
+    'SBL_Progress': ['Trainee Email', 'Trainee Name', 'Batch', 'Application', 'Video Title', 'Video URL', 'Status', 'Started Date', 'Completed Date', 'Marked By'],
     'SBL_Evaluations': ['Evaluation ID', 'Video ID', 'Trainee Email', 'Date', 'Score', 'Status'],
     'SBL_Certifications': ['Certification ID', 'Video ID', 'Trainee Email', 'Trainee Name', 'Completion Date', 'Status'],
     'Compliance_Events': ['Event ID', 'Name', 'Type', 'Description', 'Due Date', 'Status', 'Created Date'],
@@ -450,9 +451,11 @@ function getNextBatchNumber(category) {
     const ss = getSpreadsheet();
 
     // Determine which sheet to check based on category
-    const defaultCategories = ['ilt', 'sbl', 'isms', 'misc'];
+    // SBL uses its own SBL_Trainings sheet
+    const isSBL = category.toLowerCase() === 'sbl';
+    const defaultCategories = ['ilt', 'isms', 'misc'];
     const isDefaultCategory = defaultCategories.includes(category.toLowerCase());
-    const sheetName = isDefaultCategory ? 'ILT' : category;
+    const sheetName = isSBL ? 'SBL_Trainings' : (isDefaultCategory ? 'ILT' : category);
 
     const sheet = ss.getSheetByName(sheetName);
 
@@ -480,17 +483,26 @@ function getNextBatchNumber(category) {
 function saveTrainingData(trainingData) {
   try {
     const ss = getSpreadsheet();
+    const isSBL = trainingData.category.toLowerCase() === 'sbl';
 
-    // Determine which sheet to use based on category
-    const defaultCategories = ['ilt', 'sbl', 'isms', 'misc'];
+    // SBL uses its own SBL_Trainings sheet
+    const defaultCategories = ['ilt', 'isms', 'misc'];
     const isDefaultCategory = defaultCategories.includes(trainingData.category.toLowerCase());
-    const sheetName = isDefaultCategory ? 'ILT' : trainingData.category;
+    const sheetName = isSBL ? 'SBL_Trainings' : (isDefaultCategory ? 'ILT' : trainingData.category);
 
     let sheet = ss.getSheetByName(sheetName);
 
-    // If custom category sheet doesn't exist, create it
+    // If sheet doesn't exist, create it
     if (!sheet) {
-      sheet = createCategorySheet_(sheetName);
+      if (isSBL) {
+        sheet = ss.insertSheet('SBL_Trainings');
+        const headers = ['Batch', 'Category', 'Application', 'Trainee Name', 'Trainee Email', 'Level', 'Start Date', 'End Date', 'Duration (Days)'];
+        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+        sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+        sheet.setFrozenRows(1);
+      } else {
+        sheet = createCategorySheet_(sheetName);
+      }
     }
 
     if (!sheet) {
@@ -523,10 +535,82 @@ function saveTrainingData(trainingData) {
       sheet.getRange(lastRow + 1, 1, rowsToAdd.length, 9).setValues(rowsToAdd);
     }
 
+    // For SBL: also assign videos from the SBL video library
+    if (isSBL) {
+      assignSBLVideosToTrainees(ss, trainingData);
+    }
+
     return { success: true, message: 'Training data saved successfully' };
   } catch (error) {
     console.error('Error saving training data:', error);
     return { success: false, message: error.message };
+  }
+}
+
+/**
+ * Assigns videos from the SBL video library sheet to trainees.
+ * Reads from "SBL" sheet (Column A = Application, Column D = Video URL)
+ * and creates entries in SBL_Progress.
+ */
+function assignSBLVideosToTrainees(ss, trainingData) {
+  try {
+    const sblSheet = ss.getSheetByName('SBL');
+    if (!sblSheet || sblSheet.getLastRow() < 2) {
+      console.log('SBL video library sheet is empty or not found');
+      return;
+    }
+
+    // Read all video data from SBL sheet
+    const sblData = sblSheet.getRange(2, 1, sblSheet.getLastRow() - 1, 4).getValues();
+
+    // Initialize SBL_Progress sheet
+    let progressSheet = ss.getSheetByName('SBL_Progress');
+    if (!progressSheet) {
+      progressSheet = ss.insertSheet('SBL_Progress');
+      const headers = ['Trainee Email', 'Trainee Name', 'Batch', 'Application', 'Video Title', 'Video URL', 'Status', 'Started Date', 'Completed Date', 'Marked By'];
+      progressSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      progressSheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+      progressSheet.setFrozenRows(1);
+    }
+
+    const progressRows = [];
+
+    trainingData.applications.forEach(app => {
+      // Find all videos for this application in the SBL sheet
+      const appVideos = sblData.filter(row => {
+        const sheetApp = String(row[0]).trim().toLowerCase();
+        return sheetApp === app.trim().toLowerCase();
+      });
+
+      if (appVideos.length === 0) {
+        console.log('No videos found in SBL sheet for application: ' + app);
+        return;
+      }
+
+      trainingData.traineeEmails.forEach((email, i) => {
+        appVideos.forEach(video => {
+          progressRows.push([
+            email,
+            trainingData.traineeNames[i],
+            trainingData.batchCount,
+            app,
+            String(video[1]).trim() || 'Untitled Video',  // Column B = Video Title
+            String(video[3]).trim() || '',                  // Column D = Video URL
+            'Not Started',
+            '',
+            '',
+            ''
+          ]);
+        });
+      });
+    });
+
+    if (progressRows.length > 0) {
+      const lastRow = progressSheet.getLastRow();
+      progressSheet.getRange(lastRow + 1, 1, progressRows.length, 10).setValues(progressRows);
+    }
+  } catch (error) {
+    console.error('Error assigning SBL videos:', error);
   }
 }
 
@@ -728,55 +812,330 @@ function getILTReportsData() {
 function getSBLDashboardData() {
   try {
     const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName('SBL_Videos');
+    const progressSheet = ss.getSheetByName('SBL_Progress');
+    const trainingsSheet = ss.getSheetByName('SBL_Trainings');
 
-    if (!sheet || sheet.getLastRow() < 2) {
-      return { totalVideos: 0, totalViews: 0, completedVideos: 0 };
+    let totalVideos = 0, totalViews = 0, completedVideos = 0, totalTrainees = 0, totalBatches = 0;
+
+    if (progressSheet && progressSheet.getLastRow() > 1) {
+      const data = progressSheet.getRange(2, 1, progressSheet.getLastRow() - 1, 10).getValues();
+      totalVideos = data.length;
+      const uniqueTrainees = new Set();
+      const uniqueBatches = new Set();
+
+      data.forEach(row => {
+        const status = String(row[6]).trim();
+        if (status === 'Watching' || status === 'Completed') totalViews++;
+        if (status === 'Completed') completedVideos++;
+        if (row[0]) uniqueTrainees.add(String(row[0]).toLowerCase().trim());
+        if (row[2]) uniqueBatches.add(String(row[2]).trim());
+      });
+
+      totalTrainees = uniqueTrainees.size;
+      totalBatches = uniqueBatches.size;
     }
 
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
-    let totalViews = 0;
-
-    data.forEach(row => {
-      totalViews += Number(row[8]) || 0;
-    });
-
     return {
-      totalVideos: data.length,
+      totalVideos: totalVideos,
       totalViews: totalViews,
-      completedVideos: 0
+      completedVideos: completedVideos,
+      totalTrainees: totalTrainees,
+      totalBatches: totalBatches
     };
   } catch (error) {
     console.error('Error getting SBL dashboard data:', error);
-    return { totalVideos: 0, totalViews: 0, completedVideos: 0 };
+    return { totalVideos: 0, totalViews: 0, completedVideos: 0, totalTrainees: 0, totalBatches: 0 };
   }
 }
 
-function getSBLVideosData() {
+/**
+ * Get all SBL batches with their progress stats (for trainer Videos tab)
+ */
+function getSBLBatchesData() {
   try {
     const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName('SBL_Videos');
+    const trainingsSheet = ss.getSheetByName('SBL_Trainings');
+    const progressSheet = ss.getSheetByName('SBL_Progress');
 
-    if (!sheet || sheet.getLastRow() < 2) {
+    if (!trainingsSheet || trainingsSheet.getLastRow() < 2) {
+      return { batches: [] };
+    }
+
+    const trainingsData = trainingsSheet.getRange(2, 1, trainingsSheet.getLastRow() - 1, 9).getValues();
+
+    // Get unique batches with their applications
+    const batchesMap = {};
+    trainingsData.forEach(row => {
+      const batch = String(row[0]).trim();
+      if (!batch) return;
+      if (!batchesMap[batch]) {
+        let startDate = row[6];
+        let endDate = row[7];
+        if (startDate instanceof Date) startDate = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        if (endDate instanceof Date) endDate = Utilities.formatDate(endDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        batchesMap[batch] = {
+          batch: batch,
+          application: String(row[2]).trim(),
+          startDate: startDate,
+          endDate: endDate,
+          trainees: new Set(),
+          totalVideos: 0,
+          watchingVideos: 0,
+          completedVideos: 0
+        };
+      }
+      batchesMap[batch].trainees.add(String(row[4]).toLowerCase().trim());
+    });
+
+    // Get progress stats per batch
+    if (progressSheet && progressSheet.getLastRow() > 1) {
+      const progressData = progressSheet.getRange(2, 1, progressSheet.getLastRow() - 1, 10).getValues();
+      progressData.forEach(row => {
+        const batch = String(row[2]).trim();
+        if (batchesMap[batch]) {
+          batchesMap[batch].totalVideos++;
+          const status = String(row[6]).trim();
+          if (status === 'Watching') batchesMap[batch].watchingVideos++;
+          if (status === 'Completed') batchesMap[batch].completedVideos++;
+        }
+      });
+    }
+
+    const batches = Object.values(batchesMap).map(b => ({
+      batch: b.batch,
+      application: b.application,
+      startDate: b.startDate,
+      endDate: b.endDate,
+      traineeCount: b.trainees.size,
+      totalVideos: b.totalVideos,
+      watchingVideos: b.watchingVideos,
+      completedVideos: b.completedVideos,
+      progressPercent: b.totalVideos > 0 ? Math.round((b.completedVideos / b.totalVideos) * 100) : 0
+    }));
+
+    return { batches: batches };
+  } catch (error) {
+    console.error('Error getting SBL batches data:', error);
+    return { batches: [] };
+  }
+}
+
+/**
+ * Get all trainees in a batch with their video progress (for trainer drill-down)
+ */
+function getSBLBatchTraineesProgress(batch) {
+  try {
+    const ss = getSpreadsheet();
+    const progressSheet = ss.getSheetByName('SBL_Progress');
+
+    if (!progressSheet || progressSheet.getLastRow() < 2) {
+      return { trainees: [] };
+    }
+
+    const data = progressSheet.getRange(2, 1, progressSheet.getLastRow() - 1, 10).getValues();
+
+    // Group by trainee
+    const traineesMap = {};
+    data.forEach(row => {
+      const rowBatch = String(row[2]).trim();
+      if (rowBatch !== String(batch).trim()) return;
+
+      const email = String(row[0]).toLowerCase().trim();
+      if (!traineesMap[email]) {
+        traineesMap[email] = {
+          email: email,
+          name: String(row[1]).trim(),
+          application: String(row[3]).trim(),
+          videos: [],
+          totalVideos: 0,
+          watchingVideos: 0,
+          completedVideos: 0
+        };
+      }
+
+      const status = String(row[6]).trim();
+      traineesMap[email].totalVideos++;
+      if (status === 'Watching') traineesMap[email].watchingVideos++;
+      if (status === 'Completed') traineesMap[email].completedVideos++;
+
+      traineesMap[email].videos.push({
+        title: String(row[4]).trim(),
+        url: String(row[5]).trim(),
+        status: status,
+        startedDate: row[7] ? Utilities.formatDate(new Date(row[7]), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') : '',
+        completedDate: row[8] ? Utilities.formatDate(new Date(row[8]), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') : '',
+        markedBy: String(row[9]).trim()
+      });
+    });
+
+    const trainees = Object.values(traineesMap).map(t => ({
+      ...t,
+      progressPercent: t.totalVideos > 0 ? Math.round((t.completedVideos / t.totalVideos) * 100) : 0
+    }));
+
+    return { trainees: trainees };
+  } catch (error) {
+    console.error('Error getting SBL batch trainees progress:', error);
+    return { trainees: [] };
+  }
+}
+
+/**
+ * Get a trainee's assigned SBL videos (for trainee view)
+ */
+function getSBLTraineeVideos(traineeEmail) {
+  try {
+    const ss = getSpreadsheet();
+    const progressSheet = ss.getSheetByName('SBL_Progress');
+
+    if (!progressSheet || progressSheet.getLastRow() < 2) {
       return { videos: [] };
     }
 
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
+    const data = progressSheet.getRange(2, 1, progressSheet.getLastRow() - 1, 10).getValues();
     const videos = [];
 
-    data.forEach(row => {
+    data.forEach((row, index) => {
+      const rowEmail = String(row[0]).toLowerCase().trim();
+      if (rowEmail !== String(traineeEmail).toLowerCase().trim()) return;
+
       videos.push({
-        title: row[1] || 'Untitled',
-        description: row[2] || '',
-        duration: row[4] || '0:00',
-        views: row[8] || 0
+        rowIndex: index + 2,
+        batch: String(row[2]).trim(),
+        application: String(row[3]).trim(),
+        title: String(row[4]).trim(),
+        url: String(row[5]).trim(),
+        status: String(row[6]).trim() || 'Not Started',
+        startedDate: row[7] ? Utilities.formatDate(new Date(row[7]), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') : '',
+        completedDate: row[8] ? Utilities.formatDate(new Date(row[8]), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') : ''
       });
     });
 
     return { videos: videos };
   } catch (error) {
-    console.error('Error getting SBL videos data:', error);
+    console.error('Error getting SBL trainee videos:', error);
     return { videos: [] };
+  }
+}
+
+/**
+ * Mark a video as "Watching" when trainee starts watching
+ */
+function startSBLVideo(traineeEmail, batch, videoTitle) {
+  try {
+    const ss = getSpreadsheet();
+    const progressSheet = ss.getSheetByName('SBL_Progress');
+    if (!progressSheet || progressSheet.getLastRow() < 2) {
+      return { success: false, message: 'SBL_Progress sheet not found' };
+    }
+
+    const data = progressSheet.getRange(2, 1, progressSheet.getLastRow() - 1, 10).getValues();
+
+    for (let i = 0; i < data.length; i++) {
+      const rowEmail = String(data[i][0]).toLowerCase().trim();
+      const rowBatch = String(data[i][2]).trim();
+      const rowTitle = String(data[i][4]).trim();
+
+      if (rowEmail === String(traineeEmail).toLowerCase().trim() &&
+          rowBatch === String(batch).trim() &&
+          rowTitle === String(videoTitle).trim()) {
+
+        const currentStatus = String(data[i][6]).trim();
+        // Only update if not already completed
+        if (currentStatus !== 'Completed') {
+          const rowIndex = i + 2;
+          progressSheet.getRange(rowIndex, 7).setValue('Watching');
+          if (!data[i][7]) {
+            progressSheet.getRange(rowIndex, 8).setValue(new Date());
+          }
+        }
+        return { success: true, message: 'Video started' };
+      }
+    }
+
+    return { success: false, message: 'Video not found' };
+  } catch (error) {
+    console.error('Error starting SBL video:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * Mark a video as "Completed" when trainee finishes watching
+ */
+function completeSBLVideo(traineeEmail, batch, videoTitle) {
+  try {
+    const ss = getSpreadsheet();
+    const progressSheet = ss.getSheetByName('SBL_Progress');
+    if (!progressSheet || progressSheet.getLastRow() < 2) {
+      return { success: false, message: 'SBL_Progress sheet not found' };
+    }
+
+    const data = progressSheet.getRange(2, 1, progressSheet.getLastRow() - 1, 10).getValues();
+
+    for (let i = 0; i < data.length; i++) {
+      const rowEmail = String(data[i][0]).toLowerCase().trim();
+      const rowBatch = String(data[i][2]).trim();
+      const rowTitle = String(data[i][4]).trim();
+
+      if (rowEmail === String(traineeEmail).toLowerCase().trim() &&
+          rowBatch === String(batch).trim() &&
+          rowTitle === String(videoTitle).trim()) {
+
+        const rowIndex = i + 2;
+        progressSheet.getRange(rowIndex, 7).setValue('Completed');
+        if (!data[i][7]) {
+          progressSheet.getRange(rowIndex, 8).setValue(new Date());
+        }
+        progressSheet.getRange(rowIndex, 9).setValue(new Date());
+        return { success: true, message: 'Video completed' };
+      }
+    }
+
+    return { success: false, message: 'Video not found' };
+  } catch (error) {
+    console.error('Error completing SBL video:', error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * Trainer marks a video as complete for a trainee
+ */
+function markSBLVideoComplete(traineeEmail, batch, videoTitle, trainerEmail) {
+  try {
+    const ss = getSpreadsheet();
+    const progressSheet = ss.getSheetByName('SBL_Progress');
+    if (!progressSheet || progressSheet.getLastRow() < 2) {
+      return { success: false, message: 'SBL_Progress sheet not found' };
+    }
+
+    const data = progressSheet.getRange(2, 1, progressSheet.getLastRow() - 1, 10).getValues();
+
+    for (let i = 0; i < data.length; i++) {
+      const rowEmail = String(data[i][0]).toLowerCase().trim();
+      const rowBatch = String(data[i][2]).trim();
+      const rowTitle = String(data[i][4]).trim();
+
+      if (rowEmail === String(traineeEmail).toLowerCase().trim() &&
+          rowBatch === String(batch).trim() &&
+          rowTitle === String(videoTitle).trim()) {
+
+        const rowIndex = i + 2;
+        progressSheet.getRange(rowIndex, 7).setValue('Completed');
+        if (!data[i][7]) {
+          progressSheet.getRange(rowIndex, 8).setValue(new Date());
+        }
+        progressSheet.getRange(rowIndex, 9).setValue(new Date());
+        progressSheet.getRange(rowIndex, 10).setValue(trainerEmail);
+        return { success: true, message: 'Video marked as complete' };
+      }
+    }
+
+    return { success: false, message: 'Video not found' };
+  } catch (error) {
+    console.error('Error marking SBL video complete:', error);
+    return { success: false, message: error.message };
   }
 }
 
@@ -932,56 +1291,52 @@ function getComplianceReportsData() {
 function getCalendarEvents(userEmail, userType) {
   try {
     const ss = getSpreadsheet();
-    const iltSheet = ss.getSheetByName('ILT');
-
-    if (!iltSheet || iltSheet.getLastRow() < 2) {
-      return [];
-    }
-
-    const data = iltSheet.getRange(2, 1, iltSheet.getLastRow() - 1, 9).getValues();
     const eventsMap = {};
     const isTrainee = (userType || '').toLowerCase() === 'trainee';
 
-    data.forEach(row => {
-      if (!row[0]) return;
+    // Helper to process a sheet's data into events
+    function processSheet(sheet) {
+      if (!sheet || sheet.getLastRow() < 2) return;
+      const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
 
-      const traineeEmail = String(row[4]).toLowerCase().trim();
+      data.forEach(row => {
+        if (!row[0]) return;
 
-      // For trainees, only show their own trainings
-      if (isTrainee && traineeEmail !== String(userEmail).toLowerCase()) {
-        return;
-      }
+        const traineeEmail = String(row[4]).toLowerCase().trim();
+        if (isTrainee && traineeEmail !== String(userEmail).toLowerCase()) return;
 
-      const key = `${row[0]}|${row[2]}|${row[6]}|${row[7]}`;
+        const key = `${row[0]}|${row[2]}|${row[6]}|${row[7]}`;
 
-      if (!eventsMap[key]) {
-        let startDate = row[6];
-        let endDate = row[7];
+        if (!eventsMap[key]) {
+          let startDate = row[6];
+          let endDate = row[7];
+          if (startDate instanceof Date) startDate = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+          if (endDate instanceof Date) endDate = Utilities.formatDate(endDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
-        if (startDate instanceof Date) {
-          startDate = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+          eventsMap[key] = {
+            batch: row[0],
+            category: row[1],
+            application: row[2],
+            startDate: startDate,
+            endDate: endDate,
+            duration: row[8],
+            trainees: []
+          };
         }
-        if (endDate instanceof Date) {
-          endDate = Utilities.formatDate(endDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-        }
 
-        eventsMap[key] = {
-          batch: row[0],
-          category: row[1],
-          application: row[2],
-          startDate: startDate,
-          endDate: endDate,
-          duration: row[8],
-          trainees: []
-        };
-      }
-
-      eventsMap[key].trainees.push({
-        name: row[3],
-        email: row[4],
-        level: row[5]
+        eventsMap[key].trainees.push({
+          name: row[3],
+          email: row[4],
+          level: row[5]
+        });
       });
-    });
+    }
+
+    // Process ILT sheet (ILT, ISMS, Misc categories)
+    processSheet(ss.getSheetByName('ILT'));
+
+    // Process SBL_Trainings sheet (SBL category)
+    processSheet(ss.getSheetByName('SBL_Trainings'));
 
     return Object.values(eventsMap);
   } catch (error) {
@@ -1384,9 +1739,10 @@ function getTraineeProgressSummary(traineeEmail) {
 function getCategoryApplications(categoryName) {
   try {
     const ss = getSpreadsheet();
-    const defaultCategories = ['ilt', 'sbl', 'isms', 'misc'];
+    const isSBL = categoryName.toLowerCase() === 'sbl';
+    const defaultCategories = ['ilt', 'isms', 'misc'];
     const isDefaultCategory = defaultCategories.includes(categoryName.toLowerCase());
-    const sheetName = isDefaultCategory ? 'ILT' : categoryName;
+    const sheetName = isSBL ? 'SBL_Trainings' : (isDefaultCategory ? 'ILT' : categoryName);
     const sheet = ss.getSheetByName(sheetName);
 
     if (!sheet || sheet.getLastRow() < 2) {
@@ -1413,9 +1769,10 @@ function getCategoryApplications(categoryName) {
 function getCategoryTrainees(categoryName) {
   try {
     const ss = getSpreadsheet();
-    const defaultCategories = ['ilt', 'sbl', 'isms', 'misc'];
+    const isSBL = categoryName.toLowerCase() === 'sbl';
+    const defaultCategories = ['ilt', 'isms', 'misc'];
     const isDefaultCategory = defaultCategories.includes(categoryName.toLowerCase());
-    const sheetName = isDefaultCategory ? 'ILT' : categoryName;
+    const sheetName = isSBL ? 'SBL_Trainings' : (isDefaultCategory ? 'ILT' : categoryName);
     const sheet = ss.getSheetByName(sheetName);
 
     if (!sheet || sheet.getLastRow() < 2) {
@@ -1449,9 +1806,10 @@ function getCategoryTrainingsForTrainer(filters) {
   try {
     const ss = getSpreadsheet();
     const categoryName = filters.category;
-    const defaultCategories = ['ilt', 'sbl', 'isms', 'misc'];
+    const isSBL = categoryName.toLowerCase() === 'sbl';
+    const defaultCategories = ['ilt', 'isms', 'misc'];
     const isDefaultCategory = defaultCategories.includes(categoryName.toLowerCase());
-    const sheetName = isDefaultCategory ? 'ILT' : categoryName;
+    const sheetName = isSBL ? 'SBL_Trainings' : (isDefaultCategory ? 'ILT' : categoryName);
     const sheet = ss.getSheetByName(sheetName);
 
     if (!sheet || sheet.getLastRow() < 2) {
@@ -1515,9 +1873,10 @@ function getCategoryTrainingsForTrainer(filters) {
 function getCategoryTraineeProgressSummary(traineeEmail, categoryName) {
   try {
     const ss = getSpreadsheet();
-    const defaultCategories = ['ilt', 'sbl', 'isms', 'misc'];
+    const isSBL = categoryName.toLowerCase() === 'sbl';
+    const defaultCategories = ['ilt', 'isms', 'misc'];
     const isDefaultCategory = defaultCategories.includes(categoryName.toLowerCase());
-    const sheetName = isDefaultCategory ? 'ILT' : categoryName;
+    const sheetName = isSBL ? 'SBL_Trainings' : (isDefaultCategory ? 'ILT' : categoryName);
     const categorySheet = ss.getSheetByName(sheetName);
     const progressSheet = ss.getSheetByName('Training_Progress');
 
@@ -1589,9 +1948,10 @@ function getCategoryEvaluationsData(userEmail, categoryName) {
     const ss = getSpreadsheet();
     const evalSheet = ss.getSheetByName('ILT_Evaluations');
 
-    const defaultCategories = ['ilt', 'sbl', 'isms', 'misc'];
+    const isSBL = categoryName.toLowerCase() === 'sbl';
+    const defaultCategories = ['ilt', 'isms', 'misc'];
     const isDefaultCategory = defaultCategories.includes(categoryName.toLowerCase());
-    const categorySheetName = isDefaultCategory ? 'ILT' : categoryName;
+    const categorySheetName = isSBL ? 'SBL_Trainings' : (isDefaultCategory ? 'ILT' : categoryName);
     const categorySheet = ss.getSheetByName(categorySheetName);
 
     if (!evalSheet || evalSheet.getLastRow() < 2) {
@@ -1644,9 +2004,10 @@ function getCategoryReportsData(categoryName) {
     const ss = getSpreadsheet();
     const certSheet = ss.getSheetByName('ILT_Certifications');
 
-    const defaultCategories = ['ilt', 'sbl', 'isms', 'misc'];
+    const isSBL = categoryName.toLowerCase() === 'sbl';
+    const defaultCategories = ['ilt', 'isms', 'misc'];
     const isDefaultCategory = defaultCategories.includes(categoryName.toLowerCase());
-    const categorySheetName = isDefaultCategory ? 'ILT' : categoryName;
+    const categorySheetName = isSBL ? 'SBL_Trainings' : (isDefaultCategory ? 'ILT' : categoryName);
     const categorySheet = ss.getSheetByName(categorySheetName);
 
     if (!certSheet || certSheet.getLastRow() < 2) {
@@ -1764,11 +2125,22 @@ function getQuizTestNumbers(application) {
 function getAllBatches() {
   try {
     const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName('ILT');
-    if (!sheet || sheet.getLastRow() < 2) return [];
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
     const batches = new Set();
-    data.forEach(row => { if (row[0] && String(row[0]).trim()) batches.add(String(row[0]).trim()); });
+
+    // Check ILT sheet
+    const iltSheet = ss.getSheetByName('ILT');
+    if (iltSheet && iltSheet.getLastRow() > 1) {
+      const iltData = iltSheet.getRange(2, 1, iltSheet.getLastRow() - 1, 1).getValues();
+      iltData.forEach(row => { if (row[0] && String(row[0]).trim()) batches.add(String(row[0]).trim()); });
+    }
+
+    // Also check SBL_Trainings sheet
+    const sblSheet = ss.getSheetByName('SBL_Trainings');
+    if (sblSheet && sblSheet.getLastRow() > 1) {
+      const sblData = sblSheet.getRange(2, 1, sblSheet.getLastRow() - 1, 1).getValues();
+      sblData.forEach(row => { if (row[0] && String(row[0]).trim()) batches.add(String(row[0]).trim()); });
+    }
+
     return [...batches].sort((a, b) => {
       const numA = parseInt(String(a).replace(/\D/g, ''), 10) || 0;
       const numB = parseInt(String(b).replace(/\D/g, ''), 10) || 0;
@@ -1797,18 +2169,24 @@ function getAllTrainees() {
 function getTraineesForBatch(batch) {
   try {
     const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName('ILT');
-    if (!sheet || sheet.getLastRow() < 2) return [];
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
     const traineesMap = {};
-    data.forEach(row => {
-      if (String(row[0]).trim() === String(batch).trim()) {
-        const email = String(row[4]).trim().toLowerCase();
-        if (email && !traineesMap[email]) {
-          traineesMap[email] = { name: String(row[3]).trim(), email: String(row[4]).trim() };
+
+    function processSheet(sheet) {
+      if (!sheet || sheet.getLastRow() < 2) return;
+      const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+      data.forEach(row => {
+        if (String(row[0]).trim() === String(batch).trim()) {
+          const email = String(row[4]).trim().toLowerCase();
+          if (email && !traineesMap[email]) {
+            traineesMap[email] = { name: String(row[3]).trim(), email: String(row[4]).trim() };
+          }
         }
-      }
-    });
+      });
+    }
+
+    processSheet(ss.getSheetByName('ILT'));
+    processSheet(ss.getSheetByName('SBL_Trainings'));
+
     return Object.values(traineesMap).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) { console.error('Error getting trainees for batch:', error); return []; }
 }
@@ -2236,15 +2614,30 @@ function initializeCertificationsSheet() {
 function getRegisteredTrainingEmployees() {
   try {
     const ss = getSpreadsheet();
-    const sheet = ss.getSheetByName('ILT');
-    if (!sheet || sheet.getLastRow() < 2) return [];
-    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
     const employeesMap = {};
-    data.forEach(row => {
-      const email = String(row[4]).toLowerCase().trim();
-      const name = String(row[3]).trim();
-      if (email && name && !employeesMap[email]) employeesMap[email] = { name: name, email: email };
-    });
+
+    // Check ILT sheet
+    const iltSheet = ss.getSheetByName('ILT');
+    if (iltSheet && iltSheet.getLastRow() > 1) {
+      const iltData = iltSheet.getRange(2, 1, iltSheet.getLastRow() - 1, 9).getValues();
+      iltData.forEach(row => {
+        const email = String(row[4]).toLowerCase().trim();
+        const name = String(row[3]).trim();
+        if (email && name && !employeesMap[email]) employeesMap[email] = { name: name, email: email };
+      });
+    }
+
+    // Also check SBL_Trainings sheet
+    const sblSheet = ss.getSheetByName('SBL_Trainings');
+    if (sblSheet && sblSheet.getLastRow() > 1) {
+      const sblData = sblSheet.getRange(2, 1, sblSheet.getLastRow() - 1, 9).getValues();
+      sblData.forEach(row => {
+        const email = String(row[4]).toLowerCase().trim();
+        const name = String(row[3]).trim();
+        if (email && name && !employeesMap[email]) employeesMap[email] = { name: name, email: email };
+      });
+    }
+
     return Object.values(employeesMap).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) { console.error('Error getting registered employees:', error); return []; }
 }
@@ -2348,9 +2741,10 @@ function getReportsAndCertificationDataWithCerts(filters, userEmail, userType) {
 function getCategoryDashboardData(categoryName) {
   try {
     const ss = getSpreadsheet();
-    const defaultCategories = ['ilt', 'sbl', 'isms', 'misc'];
+    const isSBL = categoryName.toLowerCase() === 'sbl';
+    const defaultCategories = ['ilt', 'isms', 'misc'];
     const isDefaultCategory = defaultCategories.includes(categoryName.toLowerCase());
-    const sheetName = isDefaultCategory ? 'ILT' : categoryName;
+    const sheetName = isSBL ? 'SBL_Trainings' : (isDefaultCategory ? 'ILT' : categoryName);
     const sheet = ss.getSheetByName(sheetName);
 
     if (!sheet || sheet.getLastRow() < 2) {

@@ -759,6 +759,21 @@
       </div>
     </div>
 
+    <!-- SBL Video Player Modal -->
+    <div id="sblVideoPlayerModal" class="modal">
+      <div class="modal-content" style="max-width:900px;overflow:hidden;">
+        <div class="modal-header" style="background:var(--sbl-color);color:white;">
+          <h2 style="color:white;"><i class="fas fa-play-circle"></i> <span id="sblVideoTitle">Video Player</span></h2>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button id="sblMarkCompleteBtn" class="btn btn-success btn-sm" onclick="trainerMarkVideoCompleteFromPlayer()" style="display:none;"><i class="fas fa-check"></i> Mark Complete</button>
+            <button class="close-btn" onclick="closeSBLVideoPlayer()" style="color:white;">&times;</button>
+          </div>
+        </div>
+        <div id="sblVideoContainer" style="width:100%;height:500px;background:#000;position:relative;">
+        </div>
+      </div>
+    </div>
+
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
       <div class="loading-spinner">
