@@ -1374,7 +1374,11 @@
     document.getElementById('levelChips').innerHTML = '';
     document.getElementById('traineesList').innerHTML = '';
     document.getElementById('noTraineesMsg').style.display = 'block';
-    document.getElementById('saveTrainingBtn').disabled = true;
+    var resetBtn = document.getElementById('saveTrainingBtn');
+    if (resetBtn) {
+      resetBtn.style.opacity = '0.6';
+      resetBtn.style.cursor = 'not-allowed';
+    }
 
     showTrainingStep(1);
   }
@@ -1405,6 +1409,10 @@
     document.getElementById('prevStepBtn').classList.toggle('btn-hidden', step === 1);
     document.getElementById('nextStepBtn').classList.toggle('btn-hidden', step === 3);
     document.getElementById('saveTrainingBtn').classList.toggle('btn-hidden', step !== 3);
+
+    if (step === 3) {
+      validateTrainingForm();
+    }
   }
 
   function nextTrainingStep() {
@@ -1518,23 +1526,31 @@
   }
 
   function validateTrainingForm() {
-    const isValid =
-      document.getElementById('batchCount').value.trim() !== '' &&
-      document.getElementById('trainingCategory').value !== '' &&
-      trainingStore.applications.length > 0 &&
-      trainingStore.traineeNames.length > 0 &&
-      trainingStore.traineeEmails.length > 0 &&
-      trainingStore.levels.length > 0 &&
-      document.getElementById('trainingStartDate').value !== '' &&
-      document.getElementById('trainingEndDate').value !== '';
+    const missing = [];
 
-    document.getElementById('saveTrainingBtn').disabled = !isValid;
-    return isValid;
+    if (document.getElementById('batchCount').value.trim() === '') missing.push('Batch Number');
+    if (document.getElementById('trainingCategory').value === '') missing.push('Training Category');
+    if (trainingStore.applications.length === 0) missing.push('Applications');
+    if (trainingStore.levels.length === 0) missing.push('Training Levels');
+    if (trainingStore.traineeNames.length === 0 || trainingStore.traineeEmails.length === 0) missing.push('Trainees');
+    if (document.getElementById('trainingStartDate').value === '') missing.push('Start Date');
+    if (document.getElementById('trainingEndDate').value === '') missing.push('End Date');
+
+    const isValid = missing.length === 0;
+
+    const saveBtn = document.getElementById('saveTrainingBtn');
+    if (saveBtn) {
+      saveBtn.style.opacity = isValid ? '1' : '0.6';
+      saveBtn.style.cursor = isValid ? 'pointer' : 'not-allowed';
+    }
+
+    return { isValid: isValid, missing: missing };
   }
 
   function saveTraining() {
-    if (!validateTrainingForm()) {
-      showToast('Please fill in all required fields', 'warning');
+    const validation = validateTrainingForm();
+    if (!validation.isValid) {
+      showToast('Missing: ' + validation.missing.join(', '), 'warning');
       return;
     }
 

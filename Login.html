@@ -398,11 +398,11 @@
               <div class="form-row">
                 <div class="form-group">
                   <label><i class="fas fa-calendar"></i> Start Date</label>
-                  <input type="date" id="trainingStartDate" onchange="validateTrainingForm()">
+                  <input type="date" id="trainingStartDate" onchange="validateTrainingForm()" oninput="validateTrainingForm()">
                 </div>
                 <div class="form-group">
                   <label><i class="fas fa-calendar-check"></i> End Date</label>
-                  <input type="date" id="trainingEndDate" onchange="validateTrainingForm()">
+                  <input type="date" id="trainingEndDate" onchange="validateTrainingForm()" oninput="validateTrainingForm()">
                 </div>
               </div>
               <div class="form-row">
@@ -425,7 +425,7 @@
             <button class="btn btn-primary" id="nextStepBtn" onclick="nextTrainingStep()">
               Next <i class="fas fa-arrow-right"></i>
             </button>
-            <button class="btn btn-success btn-hidden" id="saveTrainingBtn" onclick="saveTraining()" disabled>
+            <button class="btn btn-success btn-hidden" id="saveTrainingBtn" onclick="saveTraining()">
               <i class="fas fa-save"></i> Save Training
             </button>
           </div>
