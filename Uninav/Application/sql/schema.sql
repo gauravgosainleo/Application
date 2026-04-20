@@ -18,11 +18,13 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash   VARCHAR(255) NOT NULL,
     role            ENUM('admin','resident','guest') NOT NULL DEFAULT 'resident',
     email_verified  TINYINT(1) NOT NULL DEFAULT 0,
+    status          ENUM('pending','active','deleted') NOT NULL DEFAULT 'pending',
     ad_restricted   TINYINT(1) NOT NULL DEFAULT 0,
     photo           VARCHAR(255) NULL,
     phone           VARCHAR(25)  NULL,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX (tower, house_number)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- -------------------------------------------------------------------
@@ -46,6 +48,21 @@ CREATE TABLE IF NOT EXISTS password_resets (
     expires_at  DATETIME NOT NULL,
     used        TINYINT(1) NOT NULL DEFAULT 0,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -------------------------------------------------------------------
+-- User flags (resident-reported "not my family member")
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_flags (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    flagged_user_id INT NOT NULL,
+    flagged_by      INT NOT NULL,
+    reason          VARCHAR(500) NULL,
+    status          ENUM('open','cleared','user_deleted') NOT NULL DEFAULT 'open',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at     DATETIME NULL,
+    resolved_by     INT NULL,
+    INDEX (flagged_user_id), INDEX (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- -------------------------------------------------------------------

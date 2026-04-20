@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$err) {
             // create user with email_verified=0
             $hash = password_hash($pass, PASSWORD_DEFAULT);
-            db()->prepare('INSERT INTO users (username,tower,house_number,owner_name,email,password_hash,role,email_verified) VALUES (?,?,?,?,?,?,?,0)')
+            db()->prepare("INSERT INTO users (username,tower,house_number,owner_name,email,password_hash,role,email_verified,status) VALUES (?,?,?,?,?,?,?,0,'pending')")
                 ->execute([$username,$tower,$house,$owner,$email,$hash,'resident']);
 
             // generate OTP

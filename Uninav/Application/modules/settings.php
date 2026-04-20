@@ -106,6 +106,41 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && csrf_check()) {
     // --- Ads ---
     if ($a === 'ad_delete')    { db()->prepare('DELETE FROM advertisements WHERE id=?')->execute([(int)$_POST['id']]); $msg='Ad deleted.'; }
     if ($a === 'user_restrict'){ db()->prepare('UPDATE users SET ad_restricted=? WHERE id=?')->execute([(int)$_POST['restrict'],(int)$_POST['uid']]); $msg='Updated.'; }
+
+    // --- Approvals ---
+    if ($a === 'user_approve') {
+        $uid = (int)$_POST['uid'];
+        db()->prepare("UPDATE users SET status='active' WHERE id=? AND status='pending'")->execute([$uid]);
+        $info = db()->prepare('SELECT email, owner_name FROM users WHERE id=?'); $info->execute([$uid]);
+        if ($r = $info->fetch()) {
+            if ($r['email']) send_mail($r['email'], 'Your Uninav account is approved',
+                "<p>Hi ".e($r['owner_name']).",</p><p>Your account has been approved. You can now log in.</p>");
+        }
+        $msg = 'User approved.';
+    }
+    if ($a === 'user_reject') {
+        $uid = (int)$_POST['uid'];
+        db()->prepare("UPDATE users SET status='deleted' WHERE id=? AND status='pending'")->execute([$uid]);
+        $msg = 'User rejected.';
+    }
+
+    // --- Flags ---
+    if ($a === 'flag_clear') {
+        $fid = (int)$_POST['id'];
+        db()->prepare("UPDATE user_flags SET status='cleared', resolved_at=NOW(), resolved_by=? WHERE id=?")
+            ->execute([$U['id'], $fid]);
+        $msg = 'Flag cleared.';
+    }
+    if ($a === 'flag_delete_user') {
+        $fid = (int)$_POST['id'];
+        $uid = (int)$_POST['uid'];
+        db()->beginTransaction();
+        db()->prepare("UPDATE users SET status='deleted' WHERE id=?")->execute([$uid]);
+        db()->prepare("UPDATE user_flags SET status='user_deleted', resolved_at=NOW(), resolved_by=? WHERE flagged_user_id=? AND status='open'")
+            ->execute([$U['id'], $uid]);
+        db()->commit();
+        $msg = 'User deleted. They will no longer be able to log in.';
+    }
 }
 
 // Loads
@@ -120,7 +155,15 @@ foreach (db()->query('SELECT vendor_id,tower,house_number FROM vendor_houses')->
     $vhMap[$r['vendor_id']][] = $r['tower'].'-'.$r['house_number'];
 }
 $ads     = db()->query('SELECT a.*, u.owner_name FROM advertisements a JOIN users u ON u.id=a.user_id ORDER BY a.id DESC')->fetchAll();
-$users   = db()->query("SELECT * FROM users WHERE role='resident' ORDER BY tower, house_number")->fetchAll();
+$users    = db()->query("SELECT * FROM users WHERE role='resident' AND status<>'deleted' ORDER BY status, tower, house_number")->fetchAll();
+$pending  = db()->query("SELECT * FROM users WHERE role='resident' AND status='pending' AND email_verified=1 ORDER BY created_at DESC")->fetchAll();
+$flags    = db()->query("SELECT f.*, u.owner_name AS target_name, u.username AS target_username, u.tower, u.house_number, u.email AS target_email,
+                                b.owner_name AS by_name, b.username AS by_username
+                         FROM user_flags f
+                         JOIN users u ON u.id=f.flagged_user_id
+                         JOIN users b ON b.id=f.flagged_by
+                         WHERE f.status='open'
+                         ORDER BY f.created_at DESC")->fetchAll();
 
 layout_shell_start('Admin Settings','settings');
 ?>
@@ -133,6 +176,8 @@ layout_shell_start('Admin Settings','settings');
   <a href="#finance"  onclick="switchTab(this,'finance')">Finance</a>
   <a href="#vendors"  onclick="switchTab(this,'vendors')">3rd-Party Vendors</a>
   <a href="#ads"      onclick="switchTab(this,'ads')">Ads</a>
+  <a href="#approvals" onclick="switchTab(this,'approvals')">Approvals<?= $pending ? ' ('.count($pending).')' : '' ?></a>
+  <a href="#flags"    onclick="switchTab(this,'flags')">Flags<?= $flags ? ' ('.count($flags).')' : '' ?></a>
   <a href="#users"    onclick="switchTab(this,'users')">Users</a>
 </div>
 
@@ -378,6 +423,80 @@ layout_shell_start('Admin Settings','settings');
     <?php endforeach; ?>
     </tbody>
   </table>
+</section>
+
+<!-- APPROVALS -->
+<section id="tab-approvals" class="tab-pane">
+  <h3>Pending Approvals</h3>
+  <?php if (!$pending): ?>
+    <div class="empty"><i class="fa fa-user-check"></i><p>No users waiting for approval.</p></div>
+  <?php else: ?>
+    <table class="tbl">
+      <thead><tr><th>Name</th><th>House</th><th>Email</th><th>Registered</th><th>Actions</th></tr></thead>
+      <tbody>
+      <?php foreach ($pending as $p): ?>
+        <tr>
+          <td><?= e($p['owner_name']) ?> <span class="muted small">@<?= e($p['username']) ?></span></td>
+          <td><?= e($p['tower']) ?>-<?= e($p['house_number']) ?></td>
+          <td><?= e($p['email']) ?></td>
+          <td class="muted small"><?= e($p['created_at']) ?></td>
+          <td>
+            <form method="post" style="display:inline">
+              <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+              <input type="hidden" name="action" value="user_approve">
+              <input type="hidden" name="uid" value="<?= $p['id'] ?>">
+              <button class="btn primary"><i class="fa fa-check"></i> Approve</button>
+            </form>
+            <form method="post" style="display:inline" onsubmit="return confirm('Reject and delete this registration?')">
+              <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+              <input type="hidden" name="action" value="user_reject">
+              <input type="hidden" name="uid" value="<?= $p['id'] ?>">
+              <button class="btn ghost"><i class="fa fa-xmark"></i> Reject</button>
+            </form>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  <?php endif; ?>
+</section>
+
+<!-- FLAGS -->
+<section id="tab-flags" class="tab-pane">
+  <h3>Flagged Users</h3>
+  <?php if (!$flags): ?>
+    <div class="empty"><i class="fa fa-flag"></i><p>No open flags.</p></div>
+  <?php else: ?>
+    <table class="tbl">
+      <thead><tr><th>Flagged User</th><th>House</th><th>Flagged By</th><th>Reason</th><th>When</th><th>Actions</th></tr></thead>
+      <tbody>
+      <?php foreach ($flags as $f): ?>
+        <tr>
+          <td><?= e($f['target_name']) ?> <span class="muted small">@<?= e($f['target_username']) ?></span></td>
+          <td><?= e($f['tower']) ?>-<?= e($f['house_number']) ?></td>
+          <td><?= e($f['by_name']) ?> <span class="muted small">@<?= e($f['by_username']) ?></span></td>
+          <td class="muted small"><?= e($f['reason'] ?: '(no reason given)') ?></td>
+          <td class="muted small"><?= e($f['created_at']) ?></td>
+          <td>
+            <form method="post" style="display:inline">
+              <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+              <input type="hidden" name="action" value="flag_clear">
+              <input type="hidden" name="id" value="<?= $f['id'] ?>">
+              <button class="btn ghost" title="Remove flag, keep the user"><i class="fa fa-check"></i> Clear Flag</button>
+            </form>
+            <form method="post" style="display:inline" onsubmit="return confirm('Delete user permanently? They will no longer be able to log in.')">
+              <input type="hidden" name="csrf" value="<?= csrf_token() ?>">
+              <input type="hidden" name="action" value="flag_delete_user">
+              <input type="hidden" name="id" value="<?= $f['id'] ?>">
+              <input type="hidden" name="uid" value="<?= $f['flagged_user_id'] ?>">
+              <button class="btn primary"><i class="fa fa-user-slash"></i> Delete User</button>
+            </form>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  <?php endif; ?>
 </section>
 
 <!-- USERS -->

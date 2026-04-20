@@ -27,14 +27,32 @@ run_step($log, $ok, 'Apply schema.sql', function () {
     }
 });
 
+// 1b. Idempotent migration for existing installs
+run_step($log, $ok, 'Migrate users.status column', function () {
+    $pdo = db();
+    $col = $pdo->query("SHOW COLUMNS FROM users LIKE 'status'")->fetch();
+    if (!$col) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN status ENUM('pending','active','deleted') NOT NULL DEFAULT 'pending' AFTER email_verified");
+        // Grandfather existing users: mark all as active so nobody is locked out
+        $pdo->exec("UPDATE users SET status='active'");
+    }
+    // Ensure index for homemates lookup
+    $idx = $pdo->query("SHOW INDEX FROM users WHERE Key_name='tower'")->fetch();
+    if (!$idx) {
+        try { $pdo->exec("ALTER TABLE users ADD INDEX (tower, house_number)"); } catch (Throwable $e) {}
+    }
+});
+
 // 2. Seed admin user
 run_step($log, $ok, 'Seed admin user', function () {
     $stmt = db()->prepare('SELECT id FROM users WHERE username = ?');
     $stmt->execute([ADMIN_USERNAME]);
     if (!$stmt->fetch()) {
         $hash = password_hash(ADMIN_PASSWORD, PASSWORD_DEFAULT);
-        db()->prepare('INSERT INTO users (username, owner_name, password_hash, role, email_verified) VALUES (?,?,?,?,1)')
+        db()->prepare("INSERT INTO users (username, owner_name, password_hash, role, email_verified, status) VALUES (?,?,?,?,1,'active')")
             ->execute([ADMIN_USERNAME, 'Society Administrator', $hash, 'admin']);
+    } else {
+        db()->prepare("UPDATE users SET status='active' WHERE username=?")->execute([ADMIN_USERNAME]);
     }
 });
 
@@ -44,8 +62,10 @@ run_step($log, $ok, 'Seed guest user', function () {
     $stmt->execute([GUEST_USERNAME]);
     if (!$stmt->fetch()) {
         $hash = password_hash(GUEST_PASSWORD, PASSWORD_DEFAULT);
-        db()->prepare('INSERT INTO users (username, owner_name, password_hash, role, email_verified) VALUES (?,?,?,?,1)')
+        db()->prepare("INSERT INTO users (username, owner_name, password_hash, role, email_verified, status) VALUES (?,?,?,?,1,'active')")
             ->execute([GUEST_USERNAME, 'Guest User', $hash, 'guest']);
+    } else {
+        db()->prepare("UPDATE users SET status='active' WHERE username=?")->execute([GUEST_USERNAME]);
     }
 });
 

@@ -26,8 +26,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 db()->prepare('UPDATE otp_codes SET used=1 WHERE id=?')->execute([$row['id']]);
                 if ($purpose === 'register') {
                     db()->prepare('UPDATE users SET email_verified=1 WHERE email=?')->execute([$email]);
+                    // Notify admin of new pending registration
+                    $u = db()->prepare('SELECT owner_name, tower, house_number, username FROM users WHERE email=?');
+                    $u->execute([$email]); $info = $u->fetch();
+                    if ($info) send_mail(COMPLAINTS_INBOX, 'New resident pending approval',
+                        "<p>A new resident has verified their email and is awaiting approval:</p>
+                         <ul><li>Name: ".e($info['owner_name'])."</li>
+                         <li>House: ".e($info['tower']).'-'.e($info['house_number'])."</li>
+                         <li>Username: ".e($info['username'])."</li></ul>
+                         <p>Approve in admin Settings → Pending Approvals.</p>");
                     unset($_SESSION['pending_email']);
-                    flash('msg', 'Email verified! Please login.');
+                    flash('msg', 'Email verified. Your account is now awaiting admin approval.');
                     redirect('auth/login.php');
                 } else {
                     $_SESSION['reset_verified'] = true;

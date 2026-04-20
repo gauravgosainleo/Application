@@ -26,6 +26,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($u && password_verify($password, $u['password_hash'])) {
             if ($u['role'] === 'resident' && !$u['email_verified']) {
                 $err = 'Email not verified. Check your inbox for OTP.';
+            } elseif ($u['role'] === 'resident' && $u['status'] === 'pending') {
+                $err = 'Your account is awaiting admin approval. You\'ll be notified once approved.';
+            } elseif ($u['status'] === 'deleted') {
+                $err = 'This account has been removed by the admin. Please register again.';
             } else {
                 session_regenerate_id(true);
                 $_SESSION['user_id'] = $u['id'];

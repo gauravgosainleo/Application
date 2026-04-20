@@ -10,6 +10,7 @@ $nav  = [
     'complaints'=> ['Complaints',        'complaint'],
     'finance'   => ['Finance & Expenses','finance'],
     'vendors'   => ['Third-party Vendors','vendor'],
+    'homemates' => ['My Home Mates',     'homemates'],
     'ads'       => ['Society Ads',       'ad'],
     'polls'     => ['Society Polls',     'poll'],
 ];
@@ -37,7 +38,7 @@ function layout_shell_start($title, $currentKey) {
     <nav class="sb-nav">
       <?php foreach ($nav as $key => [$label, $icon]): ?>
         <a href="<?= APP_URL ?>/modules/<?= $key ?>.php" class="<?= $currentKey===$key?'active':'' ?>">
-          <i class="fa fa-<?= $icon==='calendar'?'calendar-days':($icon==='notice'?'bullhorn':($icon==='complaint'?'circle-exclamation':($icon==='finance'?'indian-rupee-sign':($icon==='vendor'?'people-carry-box':($icon==='ad'?'rectangle-ad':'square-poll-vertical'))))) ?>"></i>
+          <i class="fa fa-<?= $icon==='calendar'?'calendar-days':($icon==='notice'?'bullhorn':($icon==='complaint'?'circle-exclamation':($icon==='finance'?'indian-rupee-sign':($icon==='vendor'?'people-carry-box':($icon==='homemates'?'house-user':($icon==='ad'?'rectangle-ad':'square-poll-vertical')))))) ?>"></i>
           <span><?= e($label) ?></span>
         </a>
       <?php endforeach; ?>
