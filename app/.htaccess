@@ -1,0 +1,16 @@
+DirectoryIndex index.php
+Options -Indexes
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "same-origin"
+</IfModule>
+
+<Files "config.php">
+    Order allow,deny
+    Deny from all
+</Files>
+<Files "db.php">
+    Order allow,deny
+    Deny from all
+</Files>
