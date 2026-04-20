@@ -6,7 +6,7 @@
 // Database
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'u694536902_uninav');
-define('DB_USER', 'u694536902_uninavGaurav');
+define('DB_USER', 'u694536902_Gauravuninav');
 define('DB_PASS', 'Gauravgosain@1991');
 define('DB_CHARSET', 'utf8mb4');
 
