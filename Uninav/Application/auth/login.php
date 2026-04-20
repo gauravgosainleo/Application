@@ -68,9 +68,6 @@ $msg = flash('msg');
       <a href="register.php">Register</a>
       <a href="forgot.php">Forgot password?</a>
     </div>
-    <div class="auth-guest">
-      <p class="muted small">Just browsing? Use <b>Guest / Guest</b>.</p>
-    </div>
   </div>
 </div>
 </body>
