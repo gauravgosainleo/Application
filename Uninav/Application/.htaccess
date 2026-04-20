@@ -1,0 +1,10 @@
+Options -Indexes
+DirectoryIndex index.php
+
+<FilesMatch "\.(sql|md)$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+</IfModule>
