@@ -1,0 +1,27 @@
+# AI Platform - Apache config
+Options -Indexes
+DirectoryIndex index.php
+
+# Deny access to config / includes
+<FilesMatch "\.(sql|log|md)$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Cache static assets
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/svg+xml   "access plus 7 days"
+  ExpiresByType image/png       "access plus 7 days"
+  ExpiresByType image/jpeg      "access plus 7 days"
+  ExpiresByType text/css        "access plus 1 day"
+  ExpiresByType application/javascript "access plus 1 day"
+</IfModule>
+
+# UTF-8 default
+AddDefaultCharset UTF-8
