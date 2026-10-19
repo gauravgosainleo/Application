@@ -86,7 +86,8 @@ After uploading, `public_html` should contain `index.html`, `install.php`, `admi
 
 Open `https://learninganddevelopment.net/install.php`.
 It checks PHP, the database connection and email settings, then creates all tables, the admin account
-(pre-filled: **gg6admin / 991129**) and starter content (news sources, trailers, catalogue, events, rewards, polls).
+(username pre-filled as **gg6admin** – type your admin password) and starter content
+(news sources, trailers, catalogue, events, rewards, polls).
 
 **Delete `install.php` from the server afterwards.**
 
@@ -114,8 +115,8 @@ hPanel → **Advanced → PHP Configuration**: choose **PHP 8.2 or newer**. For 
 
 ### 8. First login
 
-- Admin panel: `https://learninganddevelopment.net/admin/` → `gg6admin` / `991129`.
-  Change the password under **Admin account** if others may see it.
+- Admin panel: `https://learninganddevelopment.net/admin/` → username `gg6admin` and the password you typed in the installer.
+  You can change it any time under **Admin account**. This repository is public, so never write the password in its files.
 - Use **Settings → test email** in the admin panel to confirm OTP emails are delivered.
 - Players open `https://learninganddevelopment.net/` and register.
 

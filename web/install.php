@@ -184,8 +184,8 @@ if (!$installed && $_SERVER['REQUEST_METHOD'] === 'POST' && !$blocking && $dbOk)
     <label for="admin_user">Admin username</label>
     <input id="admin_user" name="admin_user" value="<?= h(isset($_POST['admin_user']) ? $_POST['admin_user'] : 'gg6admin') ?>" required>
     <label for="admin_pass">Admin password</label>
-    <input id="admin_pass" name="admin_pass" type="password" value="991129" required>
-    <p class="hint">Pre-filled with the credentials you chose (gg6admin / 991129). You can change the password later in the admin panel.</p>
+    <input id="admin_pass" name="admin_pass" type="password" minlength="6" required>
+    <p class="hint">Type the admin password you want to use. It is never stored in the code; you can change it later in the admin panel.</p>
     <button type="submit" <?= ($blocking || !$dbOk) ? 'disabled' : '' ?>>Install G VI Fan Hub</button>
     <?php if ($blocking || !$dbOk): ?><p class="bad">Fix the items marked ✖ above, then reload this page.</p><?php endif; ?>
   </form>
