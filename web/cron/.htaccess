@@ -1,0 +1,2 @@
+# Only fetch-news.php may be called over HTTP (it checks the secret cron key).
+Options -Indexes

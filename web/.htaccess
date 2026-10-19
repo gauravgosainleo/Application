@@ -1,0 +1,70 @@
+# =====================================================================
+#  G VI Fan Hub - Apache / LiteSpeed (Hostinger) settings
+# =====================================================================
+
+Options -Indexes
+DirectoryIndex index.html index.php
+
+# ---------------------------------------------------------------------
+# Force HTTPS (needed for installing the app on phones & desktops).
+# Easiest: enable "Force HTTPS" in hPanel -> Security -> SSL.
+# Or remove the # in front of the 4 lines below once SSL is active.
+# ---------------------------------------------------------------------
+# <IfModule mod_rewrite.c>
+#   RewriteEngine On
+#   RewriteCond %{HTTPS} !=on
+#   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# </IfModule>
+
+# Never serve private or source files.
+<FilesMatch "(?i)(\.(sql|log|lock|key|md|ini|sh|bak|dist|example|env)|^config(\.local)?\.php|composer\.(json|lock))$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Correct MIME types for the app.
+AddType application/manifest+json .webmanifest
+AddType text/javascript .js .mjs
+AddType image/svg+xml .svg
+AddType font/woff2 .woff2
+AddType application/vnd.android.package-archive .apk
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(self), payment=()"
+
+    # Code and pages are re-validated on every visit so updates show up immediately.
+    <FilesMatch "\.(html|js|css|webmanifest)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+    <Files "sw.js">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Service-Worker-Allowed "./"
+    </Files>
+    <FilesMatch "\.(woff2|png|jpg|jpeg|webp|gif|svg|ico)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+    <FilesMatch "\.apk$">
+        Header set Content-Disposition "attachment"
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml application/manifest+json
+</IfModule>
+
+# Larger uploads for gallery videos (ignored where PHP runs as LSAPI;
+# then set these in hPanel -> Advanced -> PHP Configuration -> PHP options).
+<IfModule mod_php.c>
+    php_value upload_max_filesize 64M
+    php_value post_max_size 64M
+    php_value max_execution_time 120
+</IfModule>

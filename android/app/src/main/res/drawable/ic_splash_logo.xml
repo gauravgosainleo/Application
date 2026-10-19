@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108"
+    tools:ignore="VectorRaster">
+    <group
+        android:scaleX="0.155"
+        android:scaleY="0.155"
+        android:translateX="14.32"
+        android:translateY="11.06">
+        <path
+            android:pathData="M205.3,210.7 A64,64 0 1,0 224,256 L174,256 M266,192 L312,320 L358,192 M416,192 L416,320"
+            android:strokeWidth="40"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="60"
+                    android:startY="140"
+                    android:endX="452"
+                    android:endY="380">
+                    <item android:offset="0" android:color="#FFFF3D8B" />
+                    <item android:offset="0.55" android:color="#FFFF7A45" />
+                    <item android:offset="1" android:color="#FFFFC24D" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M137,372 L375,372 A5,5 0 0,1 375,382 L137,382 A5,5 0 0,1 137,372 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="60"
+                    android:startY="140"
+                    android:endX="452"
+                    android:endY="380">
+                    <item android:offset="0" android:color="#FFFF3D8B" />
+                    <item android:offset="0.55" android:color="#FFFF7A45" />
+                    <item android:offset="1" android:color="#FFFFC24D" />
+                </gradient>
+            </aapt:attr>
+        </path>
+    </group>
+</vector>

@@ -1,0 +1,31 @@
+# Local / secret files
+web/app/config.local.php
+web/app/storage/*
+!web/app/storage/.htaccess
+!web/app/storage/index.html
+
+# User uploads (keep folder structure only)
+web/uploads/**/*
+!web/uploads/.htaccess
+!web/uploads/index.html
+!web/uploads/*/
+!web/uploads/*/index.html
+
+# Android build output
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/keystore.properties
+android/dist/
+android/.idea/
+android/*.iml
+android/app/release/
+*.keystore
+*.jks
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+node_modules/

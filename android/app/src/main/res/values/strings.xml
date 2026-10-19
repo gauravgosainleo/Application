@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">G VI Fan Hub</string>
+    <!-- The website address (app_url) is set in app/build.gradle. -->
+
+    <string name="loading">Loading…</string>
+    <string name="offline_title">Can\'t reach G VI Fan Hub</string>
+    <string name="offline_message">Check your internet connection and try again.</string>
+    <string name="retry">Try again</string>
+    <string name="choose_file">Choose a file</string>
+    <string name="no_file_picker">No app is available to pick files</string>
+    <string name="no_app_for_link">No app can open this link</string>
+    <string name="downloading">Downloading %1$s…</string>
+    <string name="share_via">Share via</string>
+    <string name="file_saved">Saved %1$s to Downloads</string>
+    <string name="file_save_failed">Couldn\'t save the file</string>
+</resources>

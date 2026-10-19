@@ -1,0 +1,61 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Optional release signing: create android/keystore.properties (see README) with
+// storeFile, storePassword, keyAlias and keyPassword. Never commit that file.
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+android {
+    namespace 'com.gvifanhub.app'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.gvifanhub.app'
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+
+        // The website the app opens. Change it here or build with -PappUrl=https://your-domain/
+        def appUrl = (project.findProperty('appUrl') ?: 'https://learninganddevelopment.net/').toString()
+        resValue 'string', 'app_url', appUrl
+        // Plain http is only allowed when appUrl itself is http (e.g. local testing).
+        manifestPlaceholders = [usesCleartext: appUrl.startsWith('http://').toString()]
+    }
+
+    buildFeatures {
+        buildConfig true
+        resValues true
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            release {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Without keystore.properties the release APK is signed with the debug key so it still installs.
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

@@ -1,0 +1,68 @@
+name: Android APK
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: 'Website the app opens (empty = the default in android/app/build.gradle)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Release signing (only when the secrets exist)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+            printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+            echo "Signing the APK with your release key."
+          else
+            echo "::notice::No signing secrets set - the APK is signed with a temporary debug key (see README)."
+          fi
+
+      - name: Build APK
+        env:
+          APP_URL: ${{ inputs.app_url }}
+        run: |
+          chmod +x gradlew
+          if [ -n "$APP_URL" ]; then
+            ./gradlew --no-daemon assembleRelease -PappUrl="$APP_URL"
+          else
+            ./gradlew --no-daemon assembleRelease
+          fi
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/gvi-fan-hub.apk
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gvi-fan-hub-apk
+          path: android/dist/gvi-fan-hub.apk
+          if-no-files-found: error
