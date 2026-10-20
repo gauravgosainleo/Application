@@ -4,12 +4,13 @@ import { state, setState } from '../core/state.js';
 import { $, icon, toastError, loader, errorState, emptyState, confirmBox } from '../core/ui.js';
 import { navigate } from '../core/router.js';
 import { notifItem } from '../shell.js';
+import { pageHead } from '../core/gvi-ui.js';
 
 export async function render({ el }) {
   el.innerHTML = `
-    <div class="page-head"><div><h2>${icon('bell')} Notifications</h2></div>
-      <div class="row gap"><button class="btn btn-ghost btn-sm" data-act="read">${icon('check')} Mark all read</button><button class="btn btn-ghost btn-sm" data-act="clear">${icon('trash')} Clear</button></div></div>
-    <div class="card notif-page">${loader()}</div>
+    ${pageHead('bell', 'Notifications', 'Friend requests, replies, rewards and announcements.',
+      `<button class="gvi-btn ghost sm" data-act="read">${icon('check')}Mark all read</button><button class="gvi-btn ghost sm" data-act="clear">${icon('trash')}Clear</button>`)}
+    <div class="gvi-panel flush notif-page">${loader()}</div>
     <div class="load-more-wrap"></div>`;
   const box = $('.notif-page', el);
   const more = $('.load-more-wrap', el);
@@ -20,7 +21,7 @@ export async function render({ el }) {
       const data = await api.get('notifications/list', { before_id: beforeId || '' });
       items = beforeId ? items.concat(data.items) : data.items;
       box.innerHTML = items.length ? items.map(notifItem).join('') : emptyState('bell', 'You are all caught up', 'Friend requests, replies, rewards and announcements will show up here.');
-      more.innerHTML = data.has_more ? '<button class="btn btn-ghost">Load older</button>' : '';
+      more.innerHTML = data.has_more ? `<button class="gvi-btn ghost">${icon('refresh')}Load older</button>` : '';
       const b = $('button', more);
       if (b) b.addEventListener('click', () => load(items[items.length - 1].id));
       setState({ counts: { ...state.counts, notifications: data.unread } });

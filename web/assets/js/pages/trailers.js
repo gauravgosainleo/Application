@@ -1,11 +1,10 @@
-// GTA VI trailers (YouTube embeds or direct video links).
+// GTA VI trailers (YouTube embeds or direct video links): 21:9 hero for the newest one + grid of all trailers.
 import { api } from '../core/api.js';
-import { esc, $, icon, fmtDate, openModal, youtubeEmbed, videoPlayer, skeletonCards, errorState, emptyState, asset, shareLink } from '../core/ui.js';
+import { esc, $, icon, fmtDate, openModal, youtubeEmbed, videoPlayer, errorState, emptyState, asset, shareLink } from '../core/ui.js';
+import { glare, tint } from '../core/gvi-ui.js';
 
 export async function render({ el }) {
-  el.innerHTML = `
-    <div class="page-head"><div><h2>${icon('film')} Trailers</h2><p class="muted">Every official Grand Theft Auto VI trailer in one place.</p></div></div>
-    <div class="trailers-body">${skeletonCards(4)}</div>`;
+  el.innerHTML = `<div class="trailers-body"><div class="gvi-trailer-hero skeleton"><div class="sk" style="position:absolute;inset:0"></div></div></div>`;
   const body = $('.trailers-body', el);
   let list;
   try {
@@ -19,38 +18,42 @@ export async function render({ el }) {
     body.innerHTML = emptyState('film', 'No trailers yet', 'Admins will add trailers here.');
     return;
   }
-  const [first, ...rest] = list;
+  const first = list[0];
   const thumb = (t) => (t.thumbnail ? asset(t.thumbnail) : '');
+  const big = thumb(first).replace('hqdefault', 'maxresdefault');
+  const recent = first.released_on && (Date.now() - new Date(first.released_on + 'T00:00:00')) < 45 * 86400000;
+  const longDate = (t) => (t.released_on ? fmtDate(t.released_on, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
   body.innerHTML = `
-    <button class="trailer-hero" data-id="${first.id}">
-      <img src="${esc(thumb(first).replace('hqdefault', 'maxresdefault'))}" alt="" onerror="this.onerror=null;this.src='${esc(thumb(first))}'">
-      <span class="trailer-hero-shade"></span>
-      <span class="play-badge xl">${icon('play')}</span>
-      <span class="trailer-hero-text">
-        ${first.is_featured ? `<span class="tag tag-hot">${icon('star')} Featured</span>` : ''}
+    <button class="gvi-trailer-hero" data-id="${first.id}" data-tilt="card">
+      ${big ? `<img src="${esc(big)}" alt="" onerror="this.onerror=null;this.src='${esc(thumb(first))}'">` : ''}
+      <span class="th-shade"></span>
+      <span class="th-text">
+        <span class="th-flag">${recent ? '<span class="dot"></span>NEW' : `${icon('star')}FEATURED`}</span>
         <strong>${esc(first.title)}</strong>
-        <small>${first.released_on ? esc(fmtDate(first.released_on, { day: 'numeric', month: 'long', year: 'numeric' })) : ''}</small>
-        ${first.description ? `<p>${esc(first.description)}</p>` : ''}
+        <span class="th-meta">${esc([longDate(first), first.description].filter(Boolean).join(' · '))}</span>
       </span>
+      <span class="gvi-play xl">${icon('play')}</span>
+      ${glare}
     </button>
-    ${rest.length ? `<div class="grid-cards trailers-grid">${rest.map((t) => `
-      <button class="card trailer-card" data-id="${t.id}">
-        <span class="tc-thumb"><img src="${esc(thumb(t))}" alt="" loading="lazy"><span class="play-badge">${icon('play')}</span></span>
-        <span class="tc-body"><strong>${esc(t.title)}</strong><small class="muted">${t.released_on ? esc(fmtDate(t.released_on)) : ''}</small>${t.description ? `<span class="muted small">${esc(t.description)}</span>` : ''}</span>
-      </button>`).join('')}</div>` : ''}`;
+    <h2 class="gvi-section-title gvi-trailers-title">${icon('film')}All trailers</h2>
+    <div class="gvi-trailer-grid">${list.map((t) => `
+      <button class="gvi-card gvi-trailer-card" data-id="${t.id}" data-tilt="card">
+        <span class="tc-media" style="${tint(t.id)}">${thumb(t) ? `<img src="${esc(thumb(t))}" alt="" loading="lazy">` : ''}<span class="tc-play">${icon('play')}</span></span>
+        <span class="tc-body"><strong>${esc(t.title)}</strong><small>${esc(longDate(t))}</small></span>
+        ${glare}
+      </button>`).join('')}</div>`;
 
   body.addEventListener('click', (e) => {
     const card = e.target.closest('[data-id]');
     if (!card) return;
     const t = list.find((x) => String(x.id) === card.dataset.id);
     const m = openModal({
-      title: t.title,
       size: 'xl',
-      className: 'video-modal',
+      className: 'video-modal gvi-video-modal',
       body: (t.youtube_id ? youtubeEmbed(t.youtube_id) : videoPlayer(t.video_url)) +
-        `<div class="video-meta"><span class="muted">${t.released_on ? esc(fmtDate(t.released_on, { day: 'numeric', month: 'long', year: 'numeric' })) : ''}</span>
-         <div class="row gap">${t.youtube_id ? `<a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=${esc(t.youtube_id)}">${icon('external')} YouTube</a>` : ''}
-         <button class="btn btn-ghost btn-sm" data-share>${icon('share')} Share</button></div></div>`,
+        `<div class="video-meta"><div><strong>${esc(t.title)}</strong><small>${esc(longDate(t))}</small></div>
+         <div class="row gap">${t.youtube_id ? `<a class="gvi-btn ghost sm" target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=${esc(t.youtube_id)}">${icon('external')}YouTube</a>` : ''}
+         <button class="gvi-btn ghost sm" data-share>${icon('share')}Share</button></div></div>`,
     });
     const s = m.el.querySelector('[data-share]');
     if (s) s.addEventListener('click', () => shareLink(t.title, t.youtube_id ? `https://www.youtube.com/watch?v=${t.youtube_id}` : asset(t.video_url)));

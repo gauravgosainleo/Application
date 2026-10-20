@@ -3,6 +3,8 @@ import { api } from './core/api.js';
 import { state, setState } from './core/state.js';
 import { toast, esc, fmtDateTime, icon } from './core/ui.js';
 import { defineRoute, startRouter, stopRouter } from './core/router.js';
+import { mountBackground } from './core/gvi-background.js';
+import { initMotion, pageEnter } from './core/gvi-motion.js';
 
 const root = document.getElementById('app');
 let pulseTimer = null;
@@ -109,13 +111,21 @@ async function startApp(data) {
   root.innerHTML = '';
   const { mountShell } = await import('./shell.js');
   shell = mountShell(root, { onLogout: logout });
-  startRouter(shell.outlet, (route) => shell.onRoute(route));
+  startRouter(shell.outlet, (route) => shell.onRoute(route), pageEnter);
   startPulse();
+}
+
+function unmountShell() {
+  if (shell) {
+    shell.destroy();
+    shell = null;
+  }
 }
 
 async function showAuth(message) {
   stopRouter();
   stopPulse();
+  unmountShell();
   setState({ me: null });
   api.csrf = null;
   applyTheme('vice');
@@ -133,6 +143,7 @@ async function showAuth(message) {
 function showBanned(ban, message) {
   stopRouter();
   stopPulse();
+  unmountShell();
   setState({ me: null });
   const until = ban && ban.until ? fmtDateTime(ban.until) : null;
   root.innerHTML = `
@@ -149,7 +160,7 @@ function showBanned(ban, message) {
   root.querySelector('#ban-back').addEventListener('click', () => showAuth());
 }
 
-async function logout() {
+export async function logout() {
   try {
     await api.post('auth/logout');
   } catch (e) {
@@ -168,6 +179,8 @@ api.onBanned = (err) => {
 };
 
 async function boot() {
+  mountBackground();
+  initMotion();
   try {
     const data = await api.get('auth/me');
     setState({ config: data.config });

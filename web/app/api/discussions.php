@@ -78,7 +78,50 @@ function api_discussions_list()
     foreach ($rows as $d) {
         $items[] = discussion_out($d, $authors, $liked);
     }
-    return ['items' => $items, 'page' => $page, 'total' => $total, 'has_more' => $page * $per < $total];
+    $out = ['items' => $items, 'page' => $page, 'total' => $total, 'has_more' => $page * $per < $total];
+    if ($page === 1) {
+        $out += discussion_sidebar($me, $blocked);
+    }
+    return $out;
+}
+
+/** Sidebar data for the list: categories by recent activity and this week's top contributors (by discussion XP). */
+function discussion_sidebar($me, array $blocked)
+{
+    $since = gmdate('Y-m-d H:i:s', time() - 7 * 86400);
+    $counts = [];
+    foreach (q_all('SELECT category, COUNT(*) AS n FROM discussions WHERE last_activity_at >= ? GROUP BY category',
+        [gmdate('Y-m-d H:i:s', time() - 30 * 86400)]) as $row) {
+        $counts[$row['category']] = (int)$row['n'];
+    }
+    $hot = [];
+    foreach (DISCUSSION_CATEGORIES as $i => $c) {
+        $hot[] = ['name' => $c, 'count' => isset($counts[$c]) ? $counts[$c] : 0, 'i' => $i];
+    }
+    usort($hot, function ($a, $b) {
+        return $b['count'] - $a['count'] ?: $a['i'] - $b['i'];
+    });
+    $params = [now(), $since];
+    $notBlocked = '';
+    if ($blocked) {
+        $notBlocked = ' AND x.user_id NOT IN (' . placeholders($blocked) . ')';
+        $params = array_merge($params, $blocked);
+    }
+    $rows = q_all("SELECT x.user_id, SUM(x.amount) AS xp FROM xp_log x JOIN users u ON u.id = x.user_id
+        WHERE (u.banned_until IS NULL OR u.banned_until < ?)
+          AND x.reason IN ('discussion', 'comment', 'like_recv') AND x.created_at >= ?{$notBlocked}
+        GROUP BY x.user_id ORDER BY xp DESC, x.user_id ASC LIMIT 5", $params);
+    $users = hydrate_users(array_column($rows, 'user_id'));
+    $top = [];
+    foreach ($rows as $row) {
+        if (isset($users[(int)$row['user_id']])) {
+            $top[] = ['user' => $users[(int)$row['user_id']], 'xp' => (int)$row['xp']];
+        }
+    }
+    return [
+        'hot_categories' => array_map(function ($h) { return ['name' => $h['name'], 'count' => $h['count']]; }, $hot),
+        'contributors'   => $top,
+    ];
 }
 
 function api_discussions_get()

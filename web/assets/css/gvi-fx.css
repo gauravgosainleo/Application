@@ -1,0 +1,248 @@
+/* =====================================================================
+   G VI Fan Hub — motion / glow / 3D layer (drop-in for app.css)
+   Load AFTER app.css. Uses the existing tokens (--primary, --primary-2,
+   --accent, --teal, --surface…). Adds nothing that conflicts.
+   ===================================================================== */
+
+:root {
+  --gvi-ink-0: #07030f;           /* page floor, darker than --bg */
+  --gvi-ink-1: #0e0622;
+  --gvi-ink-2: #160a2e;
+  --gvi-cobalt: #1e3a8a;          /* top-of-sky blue from the VI gradient */
+  --gvi-glass: rgba(12, 6, 24, .72);
+  --gvi-glass-2: rgba(21, 13, 39, .75);
+  --gvi-line: rgba(255, 255, 255, .09);
+  --gvi-line-2: rgba(255, 255, 255, .14);
+  --gvi-glow: 0 0 40px -14px var(--primary);
+  --gvi-glow-btn: 0 8px 24px -6px var(--primary);
+  --gvi-glow-btn-hover: 0 12px 30px -6px var(--primary);
+  --gvi-shadow-hero: 0 30px 80px rgba(0, 0, 0, .5);
+  --gvi-ease: cubic-bezier(.2, .8, .2, 1);
+  --gvi-r-hero: 28px;
+  --gvi-r-card: 18px;
+  --gvi-r-panel: 20px;
+  --gvi-r-btn: 12px;
+}
+
+/* ------------------------------------------------------------ keyframes */
+@keyframes gviInA   { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+@keyframes gviFlip  { from { transform: rotateX(-90deg); opacity: 0; } }
+@keyframes gviDrift1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(12vw, 8vh); } }
+@keyframes gviDrift2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-10vw, -6vh); } }
+@keyframes gviDrift3 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(6vw, -10vh) scale(1.15); } }
+@keyframes gviSpin  { to { transform: rotateX(360deg) rotateY(360deg); } }
+@keyframes gviSpinY { from { transform: rotateX(12deg) rotateY(0); } to { transform: rotateX(12deg) rotateY(360deg); } }
+@keyframes gviFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+@keyframes gviPulse { 0%, 100% { opacity: .55; } 50% { opacity: .95; } }
+@keyframes gviSweep { 0%, 100% { transform: translateX(-28%); } 50% { transform: translateX(28%); } }
+@keyframes gviWheelIn { from { transform: scale(.72); opacity: 0; } }
+@keyframes gviToast { from { transform: translate(-50%, 12px); opacity: 0; } }
+@keyframes gviRing  { to { transform: rotate(360deg); } }
+@keyframes gviLive  { 0% { box-shadow: 0 0 0 0 rgba(244, 63, 94, .7); } 70% { box-shadow: 0 0 0 8px rgba(244, 63, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); } }
+@keyframes gviDrop  { from { transform: translateY(-8px); opacity: 0; } }
+@keyframes gviModal { from { transform: translateY(16px) scale(.97); opacity: 0; } }
+@keyframes gviBeam  { 0%, 100% { opacity: .35; } 50% { opacity: .8; } }
+
+/* ---------------------------------------------------- reduced motion */
+/* Set data-motion="reduced" on <html> (gvi-motion.js does it) or rely on the OS setting. */
+[data-motion="reduced"] *, [data-motion="reduced"] *::before, [data-motion="reduced"] *::after { animation: none !important; }
+[data-motion="reduced"] [data-tilt] { transform: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="full"]) *, html:not([data-motion="full"]) *::before, html:not([data-motion="full"]) *::after { animation: none !important; }
+}
+
+/* ------------------------------------------------- page floor + scene */
+body.gvi { background: var(--gvi-ink-0); background-image: none; }
+.gvi-scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; perspective: 900px;
+  background: linear-gradient(180deg, var(--gvi-ink-0) 0%, var(--gvi-ink-1) 45%, var(--gvi-ink-2) 100%); }
+.gvi-scene > * { position: absolute; }
+.gvi-sky { left: -10%; right: -10%; top: -20%; height: 60%; background: radial-gradient(ellipse at 30% 0%, rgba(30, 58, 138, .5), transparent 60%); }
+.gvi-blob { border-radius: 50%; opacity: .8; filter: blur(40px); }
+.gvi-blob-1 { left: -15vw; top: -20vh; width: 55vw; height: 55vw; background: radial-gradient(circle, color-mix(in srgb, var(--primary) 55%, transparent) 0%, transparent 65%); animation: gviDrift1 38s ease-in-out infinite; }
+.gvi-blob-2 { left: 60vw; top: -10vh; width: 50vw; height: 50vw; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 50%, transparent) 0%, transparent 65%); animation: gviDrift2 46s ease-in-out infinite; }
+.gvi-blob-3 { left: 20vw; top: 70vh; width: 60vw; height: 40vw; filter: blur(50px); background: radial-gradient(circle, color-mix(in srgb, var(--primary-2) 45%, transparent) 0%, transparent 65%); animation: gviDrift3 52s ease-in-out infinite; }
+.gvi-floor { left: 50%; bottom: -30vh; width: 90vw; height: 60vh; transform: translateX(-50%); background: radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--primary) 40%, transparent), transparent 60%); animation: gviPulse 9s ease-in-out infinite; }
+.gvi-sweep { inset: -40% -60%; background: linear-gradient(100deg, transparent 42%, rgba(255, 255, 255, .04) 50%, transparent 58%); animation: gviSweep 18s ease-in-out infinite; mix-blend-mode: screen; }
+.gvi-noise { inset: 0; opacity: .06; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+.gvi-vignette { inset: 0; background: radial-gradient(ellipse at 50% 40%, transparent 55%, rgba(3, 1, 8, .7) 100%); }
+/* floating 3D artefacts */
+.gvi-cube { opacity: .32; animation: gviFloat var(--float, 26s) ease-in-out var(--delay, 0s) infinite; }
+.gvi-cube > .gvi-cube-in { position: absolute; inset: 0; transform-style: preserve-3d; animation: gviSpin var(--spin, 64s) linear infinite; }
+.gvi-face { position: absolute; inset: 0; border: 1px solid var(--c); background: rgba(255, 255, 255, .012); box-shadow: inset 0 0 22px -8px var(--c); }
+.gvi-ring { border-radius: 50%; border: 1.5px solid var(--c); box-shadow: 0 0 26px -8px var(--c), inset 0 0 26px -8px var(--c); opacity: .28; animation: gviSpin var(--spin, 72s) linear infinite; }
+/* everything else sits above the scene */
+.gvi #app, .gvi .shell, .gvi .page { position: relative; z-index: 1; }
+
+/* ---------------------------------------------------------- page enter */
+.gvi-page-in { animation: gviInA .5s var(--gvi-ease) both; }
+
+/* ---------------------------------------------------------- top bar */
+.gvi-topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 14px; height: 62px; padding: 0 clamp(12px, 3vw, 28px);
+  background: rgba(8, 4, 16, .6); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); border-bottom: 1px solid rgba(255, 255, 255, .07); }
+.gvi-wordmark { font-family: var(--display); font-size: 24px; letter-spacing: .06em; font-weight: 400; background: var(--grad-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gvi-wordmark-sub { font-size: 9px; letter-spacing: .38em; color: var(--text-2); font-weight: 700; }
+.gvi-icon-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; border: 0; background: transparent; color: var(--text-2); cursor: pointer; transition: background .15s, color .15s; }
+.gvi-icon-btn:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+.gvi-badge { position: absolute; top: 5px; right: 4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: #fff; font-size: 10.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg); }
+.gvi-avatar-btn { width: 38px; height: 38px; border-radius: 50%; border: 0; padding: 0; background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; font-weight: 800; font-size: 13px; cursor: pointer; box-shadow: 0 0 0 2px var(--gvi-ink-0), 0 0 0 3.5px var(--primary); transition: transform .15s; }
+.gvi-avatar-btn:hover { transform: scale(1.06); }
+.gvi-search { width: 100%; height: 40px; padding: 0 14px 0 40px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .05); color: #fff; outline: none; transition: border-color .15s, box-shadow .15s; }
+.gvi-search:focus { border-color: var(--primary); background: rgba(8, 4, 16, .8); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
+
+/* ------------------------------------------------------- 3D logo tile */
+.gvi-logo3d { display: block; width: 38px; height: 38px; perspective: 320px; }
+.gvi-logo3d > span { position: relative; display: block; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .15s linear; }
+.gvi-logo3d .gvi-logo-base { position: absolute; inset: 0; border-radius: 10px; background: linear-gradient(180deg, #2c1254, #110726); box-shadow: 0 0 0 1px rgba(255, 255, 255, .14) inset, 0 6px 18px -4px var(--primary); }
+.gvi-logo3d svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: translateZ(12px); }
+.gvi-logo3d.lg { width: 180px; height: 180px; perspective: 700px; }
+.gvi-logo3d.lg > span { animation: gviFloat 6s ease-in-out infinite; }
+.gvi-logo3d.lg .gvi-logo-base { border-radius: 42px; box-shadow: 0 40px 80px -20px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .14); }
+.gvi-logo3d.lg svg { transform: translateZ(28px); filter: drop-shadow(0 16px 24px rgba(0, 0, 0, .5)); }
+.gvi-logo-halo { position: absolute; inset: -30px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--primary) 60%, transparent), transparent 65%); filter: blur(22px); transform: translateZ(-20px); animation: gviPulse 5s ease-in-out infinite; }
+.gvi-logo-rim { position: absolute; inset: 0; border-radius: 42px; padding: 3px; background: var(--grad); opacity: .85; transform: translateZ(6px);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; }
+.gvi-logo-gloss { position: absolute; inset: 0; border-radius: 42px; background: linear-gradient(160deg, rgba(255, 255, 255, .14), transparent 45%); transform: translateZ(40px); pointer-events: none; }
+
+/* -------------------------------------------------------- surfaces */
+.gvi-hero { position: relative; overflow: hidden; border-radius: var(--gvi-r-hero); min-height: 420px; display: flex; align-items: flex-end; border: 1px solid var(--gvi-line-2); box-shadow: var(--gvi-shadow-hero); }
+.gvi-hero-img { position: absolute; inset: 0; background: url('../img/hero.svg') center 65% / cover; transform: scale(1.04); }
+.gvi-hero-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8, 4, 16, .94) 0%, rgba(8, 4, 16, .62) 48%, rgba(8, 4, 16, .08) 100%); }
+.gvi-hero-body { position: relative; z-index: 1; padding: clamp(22px, 4vw, 40px); width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.gvi-hero-title { font-family: var(--display); font-weight: 400; font-size: clamp(40px, 7vw, 80px); line-height: .92; letter-spacing: .03em; margin: 4px 0 0; text-shadow: 0 4px 24px rgba(0, 0, 0, .6); white-space: nowrap; }
+/* hero light fx (3 layers) */
+.gvi-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.gvi-fx-glow { position: absolute; left: 50%; top: 58%; width: 70%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--primary-2) 55%, transparent), transparent 60%); filter: blur(30px); animation: gviPulse 7s ease-in-out infinite; mix-blend-mode: screen; }
+.gvi-fx-sweep { position: absolute; inset: -30% -40%; background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .09) 50%, transparent 58%); animation: gviSweep 14s ease-in-out infinite; mix-blend-mode: screen; }
+.gvi-fx-scan { position: absolute; inset: 0; background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, .03) 0 1px, transparent 1px 4px); mix-blend-mode: overlay; }
+
+.gvi-panel { padding: 16px; border-radius: var(--gvi-r-panel); background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02)); border: 1px solid var(--gvi-line); }
+.gvi-panel.accent { background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 14%, transparent), rgba(255, 255, 255, .02)); border-color: color-mix(in srgb, var(--primary) 35%, transparent); }
+.gvi-glass { background: var(--gvi-glass-2); border: 1px solid var(--gvi-line-2); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.gvi-eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text-2); }
+.gvi-section-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
+.gvi-section-title svg { color: var(--primary); }
+.gvi-page-title { font-size: 26px; font-weight: 800; letter-spacing: -.01em; margin: 0 0 4px; }
+
+/* -------------------------------------------- tilt cards (data-tilt) */
+[data-tilt="card"] { position: relative; transform-style: preserve-3d; transition: transform .3s ease, border-color .3s; will-change: transform; }
+[data-tilt="card"]:hover { border-color: color-mix(in srgb, var(--primary) 50%, transparent); }
+[data-tilt="card"] > .gvi-glare, .gvi-glare { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: var(--g, 0); transition: opacity .3s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .14), transparent 60%); }
+[data-tilt="card"] .gvi-lift { transform: translateZ(18px); }
+[data-tilt="global"] { transform-style: preserve-3d; transition: transform .15s linear; }
+.gvi-card { display: flex; flex-direction: column; text-align: left; padding: 0; border-radius: var(--gvi-r-card); overflow: hidden; background: var(--gvi-glass-2); border: 1px solid var(--gvi-line); color: #fff; cursor: pointer; }
+.gvi-card-media { position: relative; aspect-ratio: 16 / 9; width: 100%; display: grid; place-items: center; overflow: hidden; }
+.gvi-card-media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(10, 6, 18, .6), rgba(10, 6, 18, .05)); }
+.gvi-card-media b { position: relative; z-index: 1; font-family: var(--display); font-weight: 400; font-size: 26px; letter-spacing: .04em; text-shadow: 0 3px 14px rgba(0, 0, 0, .45); }
+.gvi-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 16px; border-radius: 16px; background: rgba(21, 13, 39, .7); border: 1px solid var(--gvi-line); color: #fff; cursor: pointer; text-align: left; }
+.gvi-tile-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); margin-bottom: 6px; transform: translateZ(18px); }
+
+/* ----------------------------------------------------------- buttons */
+.gvi-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: var(--gvi-r-btn); border: 0; font-weight: 700; font-size: 14px; color: #fff; background: var(--grad); box-shadow: var(--gvi-glow-btn); cursor: pointer; transition: transform .15s, box-shadow .2s; }
+.gvi-btn:hover { transform: translateY(-1px); box-shadow: var(--gvi-glow-btn-hover); }
+.gvi-btn:active { transform: translateY(1px); }
+.gvi-btn.ghost { border: 1px solid rgba(255, 255, 255, .22); background: rgba(10, 6, 18, .45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: none; transition: background .2s; }
+.gvi-btn.ghost:hover { background: rgba(10, 6, 18, .7); transform: none; }
+.gvi-seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(10, 6, 18, .5); border: 1px solid var(--gvi-line); }
+.gvi-seg > button { padding: 9px 14px; border-radius: 11px; border: 0; background: transparent; color: var(--muted); font-weight: 700; font-size: 13.5px; cursor: pointer; transition: all .15s; }
+.gvi-seg > button.is-active { background: var(--grad); color: #fff; }
+.gvi-seg.underline > button.is-active { background: var(--surface-3); box-shadow: inset 0 -2px 0 var(--primary); }
+.gvi-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); color: var(--text-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.gvi-chip.is-active { background: color-mix(in srgb, var(--primary) 18%, transparent); border-color: var(--primary); color: #fff; }
+.gvi-level { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: .04em; background: var(--grad); color: #fff; }
+.gvi-xp { height: 8px; border-radius: 6px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.gvi-xp > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary), var(--primary-2)); box-shadow: 0 0 12px var(--primary); transition: width .8s var(--gvi-ease); }
+.gvi-input { height: 46px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--gvi-line-2); background: rgba(10, 6, 18, .55); color: #fff; outline: none; font-weight: 500; transition: border-color .15s, box-shadow .15s; }
+.gvi-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
+
+/* ------------------------------------------------- flip countdown */
+.gvi-cd { display: flex; gap: 10px; flex-wrap: wrap; perspective: 700px; }
+.gvi-cd-cell { min-width: 88px; padding: 12px 10px 10px; border-radius: 18px; text-align: center; background: rgba(8, 4, 16, .5); border: 1px solid var(--gvi-line-2); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), var(--gvi-glow); }
+.gvi-cd-cell.mini { min-width: 74px; padding: 10px 8px; border-radius: 14px; }
+.gvi-cd-digit { height: 48px; display: flex; align-items: center; justify-content: center; perspective: 300px; }
+.gvi-cd-cell.mini .gvi-cd-digit { height: 36px; }
+.gvi-cd-digit > span { font-family: var(--display); font-size: var(--size, 46px); line-height: .9; letter-spacing: .02em; color: #fff; text-shadow: 0 0 28px color-mix(in srgb, var(--primary) 55%, transparent); transform-origin: 50% 100%; backface-visibility: hidden; }
+.gvi-cd-digit > span.flip { animation: gviFlip .6s var(--gvi-ease) both; }
+.gvi-cd-label { margin-top: 6px; font-size: 10px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--text-2); }
+.gvi-cd.big .gvi-cd-cell { min-width: 120px; }
+.gvi-cd.big .gvi-cd-digit { height: auto; }
+.gvi-cd.big .gvi-cd-digit > span { font-size: clamp(64px, 10vw, 116px); }
+
+/* ------------------------------------------------------ floating dock */
+.gvi-dock { position: fixed; left: 50%; bottom: calc(14px + var(--safe-b)); transform: translateX(-50%); z-index: 40; display: flex; align-items: center; gap: 2px; padding: 6px 10px; border-radius: 999px;
+  background: var(--gvi-glass); border: 1px solid rgba(255, 255, 255, .12); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); box-shadow: 0 20px 50px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .06); }
+.gvi-dock-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 56px; height: 50px; border-radius: 14px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 10px; font-weight: 700; letter-spacing: .02em; transition: background .15s, color .15s; }
+.gvi-dock-btn:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.gvi-dock-btn.is-active { background: rgba(255, 255, 255, .08); color: var(--primary); }
+.gvi-dock-core { position: relative; width: 64px; height: 64px; margin: -22px 6px 0; border-radius: 50%; border: 0; padding: 0; background: transparent; cursor: pointer; perspective: 400px; }
+.gvi-dock-core .halo { position: absolute; inset: -8px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--primary) 55%, transparent), transparent 70%); filter: blur(8px); animation: gviPulse 3.5s ease-in-out infinite; }
+.gvi-dock-core .body { position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(180deg, #2c1254, #110726); box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .18) inset, 0 10px 30px rgba(0, 0, 0, .5), 0 0 24px -6px var(--primary); }
+.gvi-dock-core .rim { position: absolute; inset: 0; border-radius: 50%; padding: 2px; background: var(--grad); opacity: .9;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; }
+.gvi-dock-core svg { position: absolute; left: 8px; top: 8px; width: 48px; height: 48px; transform: translateZ(14px); }
+
+/* ---------------------------------------------------- radial wheel */
+.gvi-wheel-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(5, 2, 12, .6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.gvi-wheel { position: relative; width: min(88vw, 480px); aspect-ratio: 1; animation: gviWheelIn .35s var(--gvi-ease) both; }
+.gvi-wheel svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 20px 40px rgba(0, 0, 0, .6)); }
+.gvi-wheel .seg { cursor: pointer; }
+.gvi-wheel .seg path.bg { fill: rgba(255, 255, 255, .06); stroke: rgba(255, 255, 255, .16); stroke-width: 1.5; transition: fill .2s, stroke .2s; }
+.gvi-wheel .seg .ic { fill: none; stroke: var(--text-2); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; transition: stroke .2s; }
+.gvi-wheel .seg.is-active path.bg { fill: rgba(255, 255, 255, .13); stroke: var(--primary); }
+.gvi-wheel .seg.is-active .ic { stroke: var(--primary); }
+.gvi-wheel .seg:hover path.bg, .gvi-wheel .seg.is-hover path.bg { fill: url(#gviWheelGrad); filter: drop-shadow(0 0 14px var(--primary)); }
+.gvi-wheel .seg:hover .ic, .gvi-wheel .seg.is-hover .ic { stroke: #fff; }
+.gvi-wheel-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 40%; aspect-ratio: 1; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 12px; pointer-events: none; }
+.gvi-wheel-center strong { font-family: var(--display); font-weight: 400; font-size: clamp(20px, 5vw, 30px); letter-spacing: .05em; line-height: 1; text-wrap: balance; }
+.gvi-wheel-center small { color: var(--muted); font-size: 11px; line-height: 1.3; margin-top: 5px; }
+.gvi-close { position: absolute; top: 16px; right: 16px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .16); background: rgba(255, 255, 255, .06); color: #fff; cursor: pointer; display: grid; place-items: center; }
+
+/* ----------------------------------------------------- popovers */
+.gvi-pop { position: fixed; top: 68px; right: 14px; z-index: 50; width: 360px; max-width: calc(100vw - 24px); border-radius: 18px; background: var(--surface); border: 1px solid var(--gvi-line-2); box-shadow: 0 24px 60px rgba(0, 0, 0, .55); overflow: hidden; animation: gviDrop .2s ease both; }
+.gvi-pop-row { display: flex; gap: 12px; padding: 12px 16px; border: 0; border-bottom: 1px solid rgba(255, 255, 255, .06); text-align: left; color: #fff; cursor: pointer; background: transparent; width: 100%; }
+.gvi-pop-row:hover { background: rgba(255, 255, 255, .06); }
+.gvi-pop-row.unread { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.gvi-toggle { position: relative; width: 46px; height: 26px; border-radius: 13px; border: 1px solid var(--gvi-line-2); background: var(--surface-3); transition: background .2s; }
+.gvi-toggle::after { content: ""; position: absolute; top: 4px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .2s; }
+.gvi-toggle.is-on { background: var(--grad); }
+.gvi-toggle.is-on::after { left: 24px; }
+.gvi-swatch { flex: 1; height: 34px; border-radius: 10px; border: 0; cursor: pointer; transition: transform .15s; }
+.gvi-swatch:hover { transform: scale(1.05); }
+.gvi-swatch.is-active { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px #fff; }
+
+/* -------------------------------------------------------- modal/toast */
+.gvi-modal-backdrop { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(4, 2, 10, .78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.gvi-modal { position: relative; width: 100%; max-width: 1000px; border-radius: 22px; overflow: hidden; background: #000; border: 1px solid var(--gvi-line-2); box-shadow: 0 30px 80px rgba(0, 0, 0, .6); animation: gviModal .25s ease both; }
+.gvi-play { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; background: var(--grad); box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 40px -6px var(--primary); }
+.gvi-toast { position: fixed; left: 50%; bottom: calc(98px + var(--safe-b)); transform: translateX(-50%); z-index: 80; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 14px; max-width: 92vw;
+  background: rgba(31, 21, 56, .92); border: 1px solid rgba(255, 255, 255, .16); box-shadow: 0 12px 34px rgba(0, 0, 0, .4), 0 0 30px -10px var(--primary); font-weight: 600; font-size: 14px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); animation: gviToast .3s ease both; }
+
+/* ---------------------------------------------- avatar ring + live */
+.gvi-ring-avatar { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; }
+.gvi-ring-avatar::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; background: conic-gradient(from 0deg, var(--teal), var(--accent), var(--primary), var(--teal)); animation: gviRing 6s linear infinite; box-shadow: 0 0 14px -2px var(--accent); }
+.gvi-ring-avatar > span { position: relative; width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--bg); background: linear-gradient(135deg, var(--primary), var(--accent)); display: grid; place-items: center; font-weight: 800; font-size: 15px; }
+.gvi-live { width: 8px; height: 8px; border-radius: 50%; background: #f43f5e; animation: gviLive 1.6s ease-out infinite; }
+.gvi-story-ring { padding: 2.5px; border-radius: 50%; background: var(--grad); }
+.gvi-story-ring.viewed { background: #4a4166; }
+
+/* ----------------------------------------------- 3D catalogue model */
+.gvi-model { position: absolute; inset: 0; display: grid; place-items: center; perspective: 900px; overflow: hidden; }
+.gvi-model .shadow { position: absolute; left: 50%; bottom: 14%; width: 72%; height: 16%; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(ellipse at center, color-mix(in srgb, var(--primary) 50%, transparent), transparent 70%); filter: blur(8px); animation: gviPulse 4s ease-in-out infinite; }
+.gvi-model .floor { position: absolute; left: 50%; bottom: 18%; width: 64%; height: 1px; transform: translateX(-50%); background: linear-gradient(90deg, transparent, var(--primary), transparent); box-shadow: 0 0 12px var(--primary); }
+.gvi-model .rig { position: relative; width: 66%; aspect-ratio: 2 / 1; transform-style: preserve-3d; transform: rotateX(12deg); animation: gviSpinY 18s linear infinite; }
+.gvi-model .rig svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.gvi-model .rig path { fill: rgba(18, 9, 36, .96); stroke: color-mix(in srgb, var(--primary) 55%, transparent); stroke-width: 1; stroke-linejoin: round; fill-rule: evenodd; }
+.gvi-model .rig svg.edge path { fill: url(#gviModelGrad); stroke: rgba(255, 255, 255, .9); stroke-width: 2; }
+.gvi-model .rig svg.front path { filter: drop-shadow(0 0 12px var(--primary)); }
+
+/* ------------------------------------------------------- 3D map */
+.gvi-map-stage { position: relative; border-radius: 24px; overflow: hidden; border: 1px solid var(--gvi-line-2); background: radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--primary) 28%, transparent), transparent 60%), linear-gradient(180deg, #0b0518, #150a2c); box-shadow: var(--gvi-shadow-hero); }
+.gvi-map-persp { position: absolute; inset: 0; perspective: 1200px; display: flex; align-items: center; justify-content: center; padding-top: 30px; }
+.gvi-map-tilt { position: relative; width: min(70%, 440px); aspect-ratio: 2000 / 2600; transform: rotateX(55deg) rotateZ(-10deg); transform-style: preserve-3d; transition: transform .4s ease-out; }
+.gvi-map-tilt > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; border-radius: 14px; filter: saturate(1.15) brightness(1.05); box-shadow: 0 60px 90px -30px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .12); }
+.gvi-map-tilt > .sheen { position: absolute; inset: 0; border-radius: 14px; pointer-events: none; background: linear-gradient(160deg, rgba(255, 255, 255, .12), transparent 40%, transparent 70%, color-mix(in srgb, var(--primary) 25%, transparent)); }
+.gvi-pin { position: absolute; width: 0; height: 0; transform-style: preserve-3d; cursor: pointer; }
+.gvi-pin .beam { position: absolute; left: -1px; bottom: 0; width: 2px; height: var(--beam, 38px); transform-origin: bottom; transform: rotateZ(10deg) rotateX(-55deg); background: linear-gradient(0deg, var(--c), transparent); box-shadow: 0 0 10px var(--c); animation: gviBeam 2.4s ease-in-out infinite; }
+.gvi-pin .head { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--c); color: #fff; box-shadow: 0 0 0 3px rgba(255, 255, 255, .18), 0 0 24px var(--c); transform: translateY(calc(-1 * var(--beam, 38px))) rotateZ(10deg) rotateX(-55deg) scale(var(--s, 1)); transition: transform .3s; }
+.gvi-pin .pad { position: absolute; left: -8px; top: -8px; width: 16px; height: 16px; border-radius: 50%; background: color-mix(in srgb, var(--c) 40%, transparent); box-shadow: 0 0 12px var(--c); }

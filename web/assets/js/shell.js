@@ -1,25 +1,37 @@
-// App layout: sidebar, top bar (search, notifications, profile menu) and mobile bottom navigation.
+// App layout: glass top bar (search, chat, notifications, profile), floating dock + radial wheel navigation,
+// notification and profile popovers.
 import { api } from './core/api.js';
-import { state, subscribe, updateMe } from './core/state.js';
-import { esc, el, $, $$, avatar, levelPill, icon, toast, toastError, timeAgo, debounce, asset, openModal, closeAllModals } from './core/ui.js';
-import { navigate } from './core/router.js';
+import { state, subscribe, updateMe, setState } from './core/state.js';
+import { esc, el, $, $$, avatar, icon, toast, toastError, timeAgo, debounce, asset, openModal, closeAllModals, initials } from './core/ui.js';
+import { iconBody } from './core/icons.js';
+import { navigate, parseHash } from './core/router.js';
+import { mountDock, closeWheel, logoSvg } from './core/gvi-nav.js';
+import { isReduced, setReducedMotion } from './core/gvi-motion.js';
+import { applyTheme } from './app.js';
 
 export const NAV = [
-  { key: 'home', label: 'Home', icon: 'home', href: '#/home', section: 'Main', short: 'Home' },
-  { key: 'countdown', label: 'Countdown', icon: 'clock', href: '#/countdown', section: 'Main' },
-  { key: 'news', label: 'News & Articles', icon: 'news', href: '#/news', section: 'Main', short: 'News' },
-  { key: 'trailers', label: 'Trailers', icon: 'film', href: '#/trailers', section: 'Main' },
-  { key: 'map', label: 'Leonida Map', icon: 'map', href: '#/map', section: 'Main', short: 'Map' },
-  { key: 'friends', label: 'Friends & Chat', icon: 'chat', href: '#/friends', section: 'Social', badge: 'social', short: 'Chat' },
-  { key: 'status', label: 'Status', icon: 'status', href: '#/status', section: 'Social' },
-  { key: 'discussions', label: 'Discussions', icon: 'discuss', href: '#/discussions', section: 'Social' },
-  { key: 'catalogue', label: 'Catalogue', icon: 'grid', href: '#/catalogue', section: 'Explore' },
-  { key: 'gallery', label: 'Gallery', icon: 'image', href: '#/gallery', section: 'Explore' },
-  { key: 'polls', label: 'Polls', icon: 'poll', href: '#/polls', section: 'Explore' },
-  { key: 'events', label: 'Events & Rewards', icon: 'trophy', href: '#/events', section: 'Explore' },
+  { key: 'home', label: 'Home', icon: 'home', short: 'Home', desc: 'Countdown, news and what your friends are up to', sub: 'Your dashboard' },
+  { key: 'countdown', label: 'Countdown', icon: 'clock', desc: 'Days until launch, hype meter, road to launch', sub: 'Days until launch' },
+  { key: 'news', label: 'News & Articles', icon: 'news', short: 'News', desc: 'Latest from trusted sources', sub: 'Latest from trusted sources' },
+  { key: 'trailers', label: 'Trailers', icon: 'film', desc: 'Watch every trailer', sub: 'Watch every trailer' },
+  { key: 'map', label: 'Leonida Map', icon: 'map', short: 'Map', desc: 'Pin places and notes across the state', sub: 'Pin places & notes' },
+  { key: 'friends', label: 'Friends & Chat', icon: 'chat', short: 'Chat', badge: 'social', desc: 'DMs, groups and friend requests', sub: 'Chat and groups' },
+  { key: 'status', label: 'Status', icon: 'status', desc: 'Stories and who is online', sub: 'Stories & who is online' },
+  { key: 'discussions', label: 'Discussions', icon: 'discuss', desc: 'Theories, articles and hot takes', sub: 'Theories & articles' },
+  { key: 'catalogue', label: 'Catalogue', icon: 'grid', desc: 'Vehicles, weapons and gear', sub: 'Vehicles, weapons, gear' },
+  { key: 'gallery', label: 'Gallery', icon: 'image', desc: 'Photos and videos from the community', sub: 'Photos & videos' },
+  { key: 'polls', label: 'Polls', icon: 'poll', desc: 'Vote and earn XP', sub: 'Vote & earn XP' },
+  { key: 'events', label: 'Events & Rewards', icon: 'trophy', desc: 'Join, claim, level up', sub: 'Join, claim, level up' },
 ];
 
-const BOTTOM = ['home', 'news', 'map', 'friends'];
+export const THEMES = [
+  ['vice', 'Vice', '#ff3d8b', '#ff8a3d'],
+  ['leonida', 'Leonida', '#19d3c5', '#3b82f6'],
+  ['sunset', 'Sunset', '#ff7a2f', '#ffcf3f'],
+  ['midnight', 'Midnight', '#8b5cf6', '#3b82f6'],
+];
+
+export const PRESENCES = [['online', 'Online'], ['away', 'Away'], ['busy', 'Busy'], ['invisible', 'Invisible']];
 
 const NOTIF_ICONS = {
   friend_request: 'userPlus', friend_accepted: 'userCheck', discussion_comment: 'discuss', comment_reply: 'discuss',
@@ -27,72 +39,104 @@ const NOTIF_ICONS = {
   announcement: 'bell', news: 'news', poll: 'poll', event: 'calendar', trailer: 'film', gallery: 'image', moderation: 'flag', account: 'user',
 };
 
-function navLink(item, cls = 'nav-link') {
-  const label = cls === 'bottom-link' && item.short ? item.short : item.label;
-  return `<a class="${cls}" href="${item.href}" data-key="${item.key}">${icon(item.icon)}<span class="nav-label">${esc(label)}</span>${item.badge ? '<span class="nav-badge" data-badge="social" hidden></span>' : ''}</a>`;
+/** 3D logo tile (top bar / login). */
+export function logoTile(size = '') {
+  return `<span class="gvi-logo3d ${size}"><span data-tilt="global"><span class="gvi-logo-base"></span>${size === 'lg' ? '<span class="gvi-logo-halo"></span><span class="gvi-logo-rim"></span>' : ''}${logoSvg(44)}${size === 'lg' ? '<span class="gvi-logo-gloss"></span>' : ''}</span></span>`;
+}
+
+/** Wordmark "G VI / FAN HUB". */
+export function wordmark() {
+  return `<span class="gvi-brand-text"><strong class="gvi-wordmark">G VI</strong><small class="gvi-wordmark-sub">FAN HUB</small></span>`;
+}
+
+/** Gradient avatar button content: the photo if there is one, otherwise initials. */
+function avatarFace(u) {
+  return u.avatar ? `<img src="${esc(asset(u.avatar))}" alt="">` : esc(initials(u.name));
+}
+
+/** Saves the theme for the account and recolours the app. */
+export async function setTheme(key) {
+  const label = (THEMES.find((t) => t[0] === key) || THEMES[0])[1];
+  applyTheme(key);
+  try {
+    const r = await api.post('profile/update', { theme: key });
+    setState({ me: r.user });
+    toast(`${label} theme on`, 'success');
+  } catch (err) {
+    applyTheme(state.me.theme);
+    toastError(err);
+  }
+}
+
+/** Saves the presence (online / away / busy / invisible). */
+export async function setPresence(presence, text) {
+  const label = (PRESENCES.find((p) => p[0] === presence) || PRESENCES[0])[1];
+  try {
+    await api.post('profile/presence', { presence, presence_text: text !== undefined ? text : (state.me.presence_text || '') });
+    updateMe({ presence, ...(text !== undefined ? { presence_text: text } : {}) });
+    toast(`You're ${label.toLowerCase()}`, 'success');
+    return true;
+  } catch (err) {
+    toastError(err);
+    return false;
+  }
 }
 
 export function mountShell(root, { onLogout }) {
-  const sections = [...new Set(NAV.map((n) => n.section))];
   const shellEl = el(`
-    <div class="shell">
-      <aside class="sidebar">
-        <a class="brand" href="#/home">
-          <img src="assets/img/logo.svg" alt="" class="brand-logo">
-          <span class="brand-text"><strong>G VI</strong><small>FAN HUB</small></span>
-        </a>
-        <nav class="side-nav">
-          ${sections.map((s) => `<div class="nav-section"><div class="nav-heading">${esc(s)}</div>${NAV.filter((n) => n.section === s).map((n) => navLink(n)).join('')}</div>`).join('')}
-        </nav>
-        <div class="sidebar-foot">
-          <button class="btn btn-ghost btn-block install-btn" data-act="install">${icon('download')} Install app</button>
-          <p class="disclaimer">Unofficial fan app. Not affiliated with Rockstar Games or Take-Two Interactive.</p>
+    <div class="gvi-shell">
+      <header class="gvi-topbar">
+        <a class="gvi-brand" href="#/home" aria-label="G VI Fan Hub — home">${logoTile()}${wordmark()}</a>
+        <span class="gvi-divider" aria-hidden="true"></span>
+        <h1 class="gvi-page-name"></h1>
+        <div class="gvi-search-wrap">
+          ${icon('search')}
+          <input type="search" class="gvi-search" placeholder="Search players, discussions, news, cars…" aria-label="Search">
+          <div class="search-results" hidden></div>
         </div>
-      </aside>
-      <div class="main-col">
-        <header class="topbar">
-          <a class="brand brand-mobile" href="#/home"><img src="assets/img/logo.svg" alt="" class="brand-logo"><span class="brand-text"><strong>G VI</strong><small>FAN HUB</small></span></a>
-          <h1 class="page-title"></h1>
-          <div class="top-search">
-            ${icon('search')}
-            <input type="search" placeholder="Search players, discussions, news, cars…" aria-label="Search">
-            <div class="search-results" hidden></div>
-          </div>
-          <div class="top-actions">
-            <button class="icon-btn search-toggle" aria-label="Search">${icon('search')}</button>
-            <a class="icon-btn chat-btn" href="#/friends" aria-label="Chat">${icon('chat')}<span class="badge-dot" data-badge="messages" hidden></span></a>
-            <button class="icon-btn bell-btn" aria-label="Notifications">${icon('bell')}<span class="badge-dot" data-badge="notifications" hidden></span></button>
-            <button class="avatar-btn" aria-label="Profile menu"></button>
-          </div>
-          <div class="dropdown notif-panel" hidden></div>
-          <div class="dropdown profile-menu" hidden></div>
-        </header>
-        <main class="outlet" id="outlet"></main>
-      </div>
-      <nav class="bottom-nav">
-        ${BOTTOM.map((k) => navLink(NAV.find((n) => n.key === k), 'bottom-link')).join('')}
-        <button class="bottom-link more-btn" data-key="more">${icon('menu')}<span class="nav-label">More</span></button>
-      </nav>
+        <div class="gvi-top-actions">
+          <button class="gvi-icon-btn search-toggle" aria-label="Search">${icon('search')}</button>
+          <a class="gvi-icon-btn chat-btn" href="#/friends" aria-label="Chat">${icon('chat')}<span class="gvi-badge" data-badge="messages" hidden></span></a>
+          <button class="gvi-icon-btn bell-btn" aria-label="Notifications" aria-expanded="false">${icon('bell')}<span class="gvi-badge" data-badge="notifications" hidden></span></button>
+          <button class="gvi-avatar-btn avatar-btn" aria-label="Profile menu" aria-expanded="false"></button>
+        </div>
+      </header>
+      <main class="gvi-main" id="outlet"></main>
+      <div class="gvi-pop-scrim" hidden></div>
+      <div class="gvi-pop notif-pop" hidden></div>
+      <div class="gvi-pop profile-pop" hidden></div>
     </div>`);
   root.appendChild(shellEl);
 
   const outlet = $('#outlet', shellEl);
-  const notifPanel = $('.notif-panel', shellEl);
-  const profileMenu = $('.profile-menu', shellEl);
+  const notifPop = $('.notif-pop', shellEl);
+  const profilePop = $('.profile-pop', shellEl);
+  const scrim = $('.gvi-pop-scrim', shellEl);
   const avatarBtn = $('.avatar-btn', shellEl);
+  const bellBtn = $('.bell-btn', shellEl);
+
+  const dock = mountDock({
+    items: NAV,
+    current: () => parseHash().path,
+    onGo: (key) => navigate('#/' + key),
+    icon,
+    iconBody,
+  });
 
   /* ------------------------------------------------- badges & avatar */
   function renderBadges() {
     const c = state.counts || {};
     const social = (c.messages || 0) + (c.friend_requests || 0);
-    $$('[data-badge="social"]', shellEl).forEach((b) => { b.hidden = !social; b.textContent = social > 99 ? '99+' : social; });
-    $$('[data-badge="messages"]', shellEl).forEach((b) => { b.hidden = !c.messages; });
-    $$('[data-badge="notifications"]', shellEl).forEach((b) => { b.hidden = !c.notifications; b.textContent = c.notifications > 99 ? '99+' : c.notifications || ''; });
+    const fmt = (n) => (n > 99 ? '99+' : String(n));
+    $$('[data-badge="social"]').forEach((b) => { b.hidden = !social; b.textContent = social ? fmt(social) : ''; });
+    $$('[data-badge="messages"]', shellEl).forEach((b) => { b.hidden = !c.messages; b.textContent = c.messages ? fmt(c.messages) : ''; });
+    $$('[data-badge="notifications"]', shellEl).forEach((b) => { b.hidden = !c.notifications; b.textContent = c.notifications ? fmt(c.notifications) : ''; });
     document.title = (c.notifications || c.messages ? `(${(c.notifications || 0) + (c.messages || 0)}) ` : '') + 'G VI Fan Hub';
   }
   function renderAvatar() {
     if (!state.me) return;
-    avatarBtn.innerHTML = avatar({ ...state.me, presence: state.me.presence === 'invisible' ? 'offline' : state.me.presence }, 'sm');
+    avatarBtn.innerHTML = avatarFace(state.me);
+    avatarBtn.classList.toggle('has-img', !!state.me.avatar);
   }
   renderBadges();
   renderAvatar();
@@ -100,92 +144,106 @@ export function mountShell(root, { onLogout }) {
     if (patch.counts) renderBadges();
     if (patch.me) {
       renderAvatar();
-      if (!profileMenu.hidden) renderProfileMenu();
+      if (!profilePop.hidden) renderProfilePop();
     }
   });
 
-  /* ------------------------------------------------------- dropdowns */
-  function closeDropdowns(except) {
-    [notifPanel, profileMenu].forEach((d) => { if (d !== except) d.hidden = true; });
+  /* ------------------------------------------------------- popovers */
+  function closePops(except) {
+    [notifPop, profilePop].forEach((p) => { if (p !== except) p.hidden = true; });
+    scrim.hidden = !except;
+    bellBtn.setAttribute('aria-expanded', String(except === notifPop));
+    avatarBtn.setAttribute('aria-expanded', String(except === profilePop));
     $('.search-results', shellEl).hidden = true;
   }
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.notif-panel, .bell-btn, .profile-menu, .avatar-btn, .top-search')) closeDropdowns();
-  });
+  scrim.addEventListener('click', () => closePops());
+  const onKey = (e) => {
+    if (e.key === 'Escape') {
+      closePops();
+      $('.gvi-search-wrap', shellEl).classList.remove('open');
+    }
+  };
+  document.addEventListener('keydown', onKey);
+  const onDocClick = (e) => {
+    if (!e.target.closest('.gvi-search-wrap, .search-toggle')) $('.search-results', shellEl).hidden = true;
+  };
+  document.addEventListener('click', onDocClick);
 
   /* --------------------------------------------------- profile menu */
-  function renderProfileMenu() {
+  function renderProfilePop() {
     const me = state.me;
     const lv = me.level;
     const pct = Math.round((lv.progress || 0) * 100);
-    const presences = [['online', 'Online'], ['away', 'Away'], ['busy', 'Busy'], ['invisible', 'Invisible']];
-    profileMenu.innerHTML = `
-      <div class="pm-head">
-        <div class="pm-cover" ${me.cover ? `style="background-image:url('${esc(asset(me.cover))}')"` : ''}></div>
-        <div class="pm-id">
-          ${avatar({ ...me, presence: me.presence === 'invisible' ? 'offline' : me.presence }, 'lg')}
-          <div class="pm-name">
-            <strong>${esc(me.name)}</strong>
-            <span class="muted">@${esc(me.username)}</span>
-            ${me.title ? `<span class="user-title">${esc(me.title)}</span>` : ''}
-          </div>
-        </div>
-        <div class="pm-level">
-          <div class="pm-level-row">${levelPill(lv.level)}<span class="rank">${esc(lv.rank)}</span><span class="muted small">${lv.xp.toLocaleString()} XP</span></div>
-          <div class="xp-bar" title="${pct}% to level ${lv.level + 1}"><span style="width:${pct}%"></span></div>
-          <div class="muted tiny">${(lv.next_xp - lv.xp).toLocaleString()} XP to level ${lv.level + 1}${me.login_streak > 1 ? ` · 🔥 ${me.login_streak}-day streak` : ''}</div>
-        </div>
+    const reduced = isReduced();
+    profilePop.innerHTML = `
+      <div class="pp-cover" ${me.cover ? `style="background-image:url('${esc(asset(me.cover))}')"` : ''}></div>
+      <div class="pp-id">
+        <span class="pp-avatar">${avatarFace(me)}</span>
+        <span class="pp-name"><strong>${esc(me.name)}</strong><span>@${esc(me.username)}${me.title ? ` · <b>${esc(me.title)}</b>` : ''}</span></span>
       </div>
-      <div class="pm-presence" role="group" aria-label="Your status">
-        ${presences.map(([k, l]) => `<button class="presence-opt ${me.presence === k ? 'active' : ''}" data-presence="${k}"><span class="presence-dot ${k === 'invisible' ? 'offline' : k}"></span>${l}</button>`).join('')}
+      <div class="pp-level">
+        <div class="pp-level-row"><span class="gvi-level">LVL ${lv.level}</span><span class="pp-rank">${esc(lv.rank)}</span><span class="muted">${lv.xp.toLocaleString()} / ${lv.next_xp.toLocaleString()} XP</span></div>
+        <div class="gvi-xp" title="${pct}% to level ${lv.level + 1}"><span style="width:${pct}%"></span></div>
       </div>
-      <div class="pm-links">
+      <div class="pp-presence" role="group" aria-label="Your status">
+        ${PRESENCES.map(([k, l]) => `<button class="${me.presence === k ? 'is-active' : ''}" data-presence="${k}" aria-pressed="${me.presence === k}"><span class="pdot ${k}"></span>${l}</button>`).join('')}
+      </div>
+      <div class="pp-section">
+        <div class="pp-label">Theme</div>
+        <div class="pp-swatches">${THEMES.map(([k, l, a, b]) => `<button class="gvi-swatch ${(me.theme || 'vice') === k ? 'is-active' : ''}" data-theme-set="${k}" title="${l}" aria-label="${l} theme" style="background:linear-gradient(135deg,${a},${b})"></button>`).join('')}</div>
+        <button class="pp-toggle-row" data-act="motion" aria-pressed="${reduced}"><span>Reduce motion</span><span class="gvi-toggle ${reduced ? 'is-on' : ''}"></span></button>
+      </div>
+      <div class="pp-links">
         <a href="#/profile">${icon('user')} My profile</a>
-        <a href="#/profile?tab=edit">${icon('edit')} Edit profile</a>
-        <button data-act="avatar">${icon('camera')} Change profile picture</button>
         <a href="#/events?tab=rewards">${icon('gift')} Rewards & badges</a>
-        <a href="#/events?tab=xp">${icon('zap')} XP & level</a>
-        <a href="#/friends?tab=friends">${icon('users')} Friends</a>
-        <a href="#/profile?tab=settings">${icon('settings')} Settings & privacy</a>
-        <a href="#/profile?tab=security">${icon('shield')} Password & security</a>
+        <a href="#/profile?tab=settings">${icon('shield')} Settings & privacy</a>
         <button data-act="install" class="install-btn">${icon('download')} Install app</button>
         <a href="downloads/gvi-fan-hub.apk" download class="apk-menu-link">${icon('phone')} Get the Android app</a>
-        <button data-act="logout" class="danger-link">${icon('logout')} Log out</button>
+        <button data-act="logout" class="pp-logout">${icon('logout')} Log out</button>
       </div>`;
   }
 
   avatarBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const open = profileMenu.hidden;
-    closeDropdowns(profileMenu);
-    if (open) renderProfileMenu();
-    profileMenu.hidden = !open;
+    const open = profilePop.hidden;
+    if (open) {
+      renderProfilePop();
+      closePops(profilePop);
+      profilePop.hidden = false;
+    } else {
+      closePops();
+    }
   });
 
-  profileMenu.addEventListener('click', async (e) => {
+  profilePop.addEventListener('click', async (e) => {
     const presenceBtn = e.target.closest('[data-presence]');
     if (presenceBtn) {
-      const presence = presenceBtn.dataset.presence;
-      try {
-        await api.post('profile/presence', { presence, presence_text: state.me.presence_text || '' });
-        updateMe({ presence });
-        toast(`Status set to ${presenceBtn.textContent.trim()}`, 'success');
-      } catch (err) {
-        toastError(err);
-      }
+      if (await setPresence(presenceBtn.dataset.presence)) renderProfilePop();
       return;
     }
-    if (e.target.closest('a')) {
-      profileMenu.hidden = true;
+    const themeBtn = e.target.closest('[data-theme-set]');
+    if (themeBtn) {
+      $$('[data-theme-set]', profilePop).forEach((b) => b.classList.toggle('is-active', b === themeBtn));
+      await setTheme(themeBtn.dataset.themeSet);
       return;
     }
     const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'motion') {
+      const on = !isReduced();
+      setReducedMotion(on);
+      renderProfilePop();
+      toast(on ? 'Reduced motion on' : 'Full motion on', 'success');
+      return;
+    }
+    if (e.target.closest('a')) {
+      closePops();
+      return;
+    }
     if (act === 'logout') {
-      profileMenu.hidden = true;
+      closePops();
       onLogout();
-    } else if (act === 'avatar') {
-      profileMenu.hidden = true;
-      pickAndUploadAvatar();
+    } else if (act === 'install') {
+      closePops();
     }
   });
 
@@ -212,34 +270,34 @@ export function mountShell(root, { onLogout }) {
 
   /* --------------------------------------------------- notifications */
   async function openNotifications() {
-    notifPanel.innerHTML = `<div class="dd-head"><strong>Notifications</strong><button class="link-btn" data-act="read-all">Mark all read</button></div><div class="dd-body"><div class="loader"><span class="spinner"></span></div></div><a class="dd-foot" href="#/notifications">View all</a>`;
+    notifPop.innerHTML = `<div class="np-head"><strong>Notifications</strong><button class="link-btn" data-act="read-all">Mark all read</button></div><div class="np-body"><div class="loader"><span class="spinner"></span></div></div><a class="np-foot" href="#/notifications">View all notifications</a>`;
     try {
       const data = await api.get('notifications/list');
-      $('.dd-body', notifPanel).innerHTML = data.items.length
+      $('.np-body', notifPop).innerHTML = data.items.length
         ? data.items.slice(0, 12).map(notifItem).join('')
         : `<div class="empty small">${icon('bell', 'empty-icon')}<p>No notifications yet</p></div>`;
     } catch (err) {
-      $('.dd-body', notifPanel).innerHTML = `<p class="muted pad">${esc(err.message)}</p>`;
+      $('.np-body', notifPop).innerHTML = `<p class="muted pad">${esc(err.message)}</p>`;
     }
   }
-  $('.bell-btn', shellEl).addEventListener('click', (e) => {
+  bellBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (window.innerWidth < 700) {
-      navigate('#/notifications');
-      return;
+    const open = notifPop.hidden;
+    if (open) {
+      closePops(notifPop);
+      notifPop.hidden = false;
+      openNotifications();
+    } else {
+      closePops();
     }
-    const open = notifPanel.hidden;
-    closeDropdowns(notifPanel);
-    notifPanel.hidden = !open;
-    if (open) openNotifications();
   });
-  notifPanel.addEventListener('click', async (e) => {
+  notifPop.addEventListener('click', async (e) => {
     if (e.target.closest('[data-act="read-all"]')) {
       try {
         const r = await api.post('notifications/read', { all: true });
         state.counts.notifications = r.unread;
         renderBadges();
-        $$('.notif.unread', notifPanel).forEach((n) => n.classList.remove('unread'));
+        $$('.notif.unread', notifPop).forEach((n) => n.classList.remove('unread'));
       } catch (err) {
         toastError(err);
       }
@@ -247,7 +305,7 @@ export function mountShell(root, { onLogout }) {
     }
     const item = e.target.closest('.notif');
     if (item) {
-      notifPanel.hidden = true;
+      closePops();
       if (item.classList.contains('unread')) {
         api.post('notifications/read', { id: item.dataset.id }).then((r) => {
           state.counts.notifications = r.unread;
@@ -259,15 +317,16 @@ export function mountShell(root, { onLogout }) {
         else window.open(item.dataset.link, '_blank', 'noopener');
       }
     }
-    if (e.target.closest('.dd-foot')) notifPanel.hidden = true;
+    if (e.target.closest('.np-foot')) closePops();
   });
-  document.addEventListener('gvi:new-notifications', () => {
-    $('.bell-btn', shellEl).classList.add('ring');
-    setTimeout(() => $('.bell-btn', shellEl).classList.remove('ring'), 1200);
-  });
+  const onNewNotif = () => {
+    bellBtn.classList.add('ring');
+    setTimeout(() => bellBtn.classList.remove('ring'), 1200);
+  };
+  document.addEventListener('gvi:new-notifications', onNewNotif);
 
   /* ---------------------------------------------------------- search */
-  const searchBox = $('.top-search', shellEl);
+  const searchBox = $('.gvi-search-wrap', shellEl);
   const searchInput = $('input', searchBox);
   const results = $('.search-results', searchBox);
   const runSearch = debounce(async () => {
@@ -295,52 +354,34 @@ export function mountShell(root, { onLogout }) {
   });
   $('.search-toggle', shellEl).addEventListener('click', (e) => {
     e.stopPropagation();
+    closePops();
     searchBox.classList.toggle('open');
     if (searchBox.classList.contains('open')) searchInput.focus();
   });
 
-  /* ------------------------------------------------------- more sheet */
-  $('.more-btn', shellEl).addEventListener('click', () => {
-    const m = openModal({
-      size: 'sheet',
-      className: 'sheet-modal',
-      body: `
-        <div class="more-head">${avatar(state.me, 'md')}<div><strong>${esc(state.me.name)}</strong><div class="muted small">@${esc(state.me.username)} · ${levelPill(state.me.level.level)}</div></div><a class="btn btn-sm btn-ghost" href="#/profile">Profile</a></div>
-        <div class="more-grid">${NAV.map((n) => `<a href="${n.href}" class="more-item">${icon(n.icon)}<span>${esc(n.label)}</span>${n.badge ? '<span class="nav-badge" data-badge="social" hidden></span>' : ''}</a>`).join('')}
-          <a href="#/notifications" class="more-item">${icon('bell')}<span>Notifications</span></a>
-          <a href="#/profile?tab=settings" class="more-item">${icon('settings')}<span>Settings</span></a>
-        </div>
-        <button class="btn btn-ghost btn-block install-btn" data-act="install">${icon('download')} Install app</button>
-        <button class="btn btn-ghost btn-block danger-link" data-act="logout">${icon('logout')} Log out</button>`,
-    });
-    const c = state.counts;
-    const social = (c.messages || 0) + (c.friend_requests || 0);
-    $$('[data-badge="social"]', m.el).forEach((b) => { b.hidden = !social; b.textContent = social; });
-    m.el.addEventListener('click', (e) => {
-      if (e.target.closest('a')) m.close();
-      const act = e.target.closest('[data-act]')?.dataset.act;
-      if (act === 'logout') { m.close(); onLogout(); }
-      if (act === 'install') m.close();
-    });
-  });
-
   /* ------------------------------------------------------ route hook */
   function onRoute(route) {
-    closeDropdowns();
+    closePops();
+    closeWheel();
     closeAllModals();
-    const key = route.meta.key;
-    $$('[data-key]', shellEl).forEach((a) => a.classList.toggle('active', a.dataset.key === key));
-    const isMore = !BOTTOM.includes(key);
-    $('.more-btn', shellEl).classList.toggle('active', isMore && key !== 'profile');
-    $('.page-title', shellEl).textContent = route.meta.title || '';
-    shellEl.classList.toggle('full-bleed', !!route.meta.fullBleed);
+    searchBox.classList.remove('open');
+    $('.gvi-page-name', shellEl).textContent = route.meta.title || '';
+    shellEl.dataset.route = route.meta.key || '';
   }
 
-  return { outlet, onRoute, destroy: unsub };
+  function destroy() {
+    unsub();
+    dock.destroy();
+    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('click', onDocClick);
+    document.removeEventListener('gvi:new-notifications', onNewNotif);
+  }
+
+  return { outlet, onRoute, destroy };
 }
 
 function notifItem(n) {
-  return `<button class="notif ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-link="${esc(n.link || '')}">
+  return `<button class="notif gvi-pop-row ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-link="${esc(n.link || '')}">
     <span class="notif-icon">${n.actor ? avatar(n.actor, 'sm', { presence: false }) : icon(NOTIF_ICONS[n.type] || 'bell')}</span>
     <span class="notif-text"><strong>${esc(n.title)}</strong>${n.body ? `<span>${esc(n.body)}</span>` : ''}<small>${timeAgo(n.created_at)}</small></span>
   </button>`;

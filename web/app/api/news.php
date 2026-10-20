@@ -3,6 +3,14 @@
  * Published news & articles (every article shows its source).
  */
 
+/** News filter chips: which words (in which columns) put a story under each topic. */
+const NEWS_TOPICS = [
+    'official'  => [[['source_name'], ['Rockstar Games', 'Rockstar Newswire', 'Take-Two']], [['source_url'], ['rockstargames.com', 'take2games.com']]],
+    'analysis'  => [[['title', 'summary'], ['analysis', 'breakdown', 'explained', 'every detail', 'theory', 'theories', 'deep dive', 'spotted', 'everything we know', 'things we', 'review', 'compared']]],
+    'community' => [[['source_name'], ['Forum', 'Reddit', 'Fan Hub', 'Community', 'GTABase', 'Intel']]],
+    'rumours'   => [[['title', 'summary'], ['rumor', 'rumour', 'leak', 'reportedly', 'insider', 'allegedly', 'speculat']]],
+];
+
 function api_news_list()
 {
     current_user();
@@ -15,6 +23,23 @@ function api_news_list()
         $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search) . '%';
         $where .= ' AND (title LIKE ? OR summary LIKE ? OR source_name LIKE ?)';
         array_push($params, $like, $like, $like);
+    }
+    $topic = in_str('topic', 20);
+    if (isset(NEWS_TOPICS[$topic])) {
+        $or = [];
+        foreach (NEWS_TOPICS[$topic] as $rule) {
+            list($cols, $words) = $rule;
+            foreach ($words as $w) {
+                foreach ($cols as $c) {
+                    $or[] = "{$c} LIKE ?";
+                    $params[] = '%' . $w . '%';
+                }
+            }
+        }
+        if ($topic === 'community') {
+            $or[] = "(origin = 'manual' AND source_name NOT LIKE '%Rockstar%')";
+        }
+        $where .= ' AND (' . implode(' OR ', $or) . ')';
     }
     $total = (int)q_val("SELECT COUNT(*) FROM news WHERE {$where}", $params);
     $rows = q_all("SELECT * FROM news WHERE {$where} ORDER BY is_featured DESC, published_at DESC, id DESC LIMIT ? OFFSET ?",

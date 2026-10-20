@@ -4,6 +4,7 @@ const routes = [];
 let current = null;
 let outlet = null;
 let onChange = null;
+let onMount = null;
 let navToken = 0;
 
 export function defineRoute(pattern, loader, meta = {}) {
@@ -71,6 +72,7 @@ async function handle() {
     page.className = 'page page-' + (match.meta.key || 'x');
     outlet.innerHTML = '';
     outlet.appendChild(page);
+    if (onMount) onMount(page);
     const cleanup = await mod.render({ el: page, params, query, path });
     if (token !== navToken) {
       if (typeof cleanup === 'function') cleanup();
@@ -84,9 +86,10 @@ async function handle() {
   }
 }
 
-export function startRouter(outletEl, changeCb) {
+export function startRouter(outletEl, changeCb, mountCb = null) {
   outlet = outletEl;
   onChange = changeCb;
+  onMount = mountCb;
   window.addEventListener('hashchange', handle);
   handle();
 }

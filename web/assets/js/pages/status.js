@@ -1,15 +1,13 @@
 // Status: 24h stories (text or photo) + everyone's presence/activity.
 import { api } from '../core/api.js';
 import { state, updateMe } from '../core/state.js';
-import { esc, $, $$, icon, avatar, timeAgo, presenceLabel, openModal, confirmBox, toast, toastError, setBusy, asset, loader, errorState, reportDialog, levelPill } from '../core/ui.js';
+import { esc, $, $$, icon, avatar, timeAgo, presenceLabel, openModal, confirmBox, toast, toastError, setBusy, asset, loader, errorState, reportDialog } from '../core/ui.js';
+import { glare, ringAvatar, sectionHead } from '../core/gvi-ui.js';
 
 const BG_LABELS = { sunset: 'Sunset', vice: 'Vice', ocean: 'Ocean', neon: 'Neon', gold: 'Gold', night: 'Night', jungle: 'Jungle', flame: 'Flame' };
 
 export async function render({ el }) {
-  el.innerHTML = `
-    <div class="page-head"><div><h2>${icon('status')} Status</h2><p class="muted">Share what you're up to for 24 hours and see what your crew is doing.</p></div>
-      <button class="btn btn-primary" data-act="new">${icon('plus')} New status</button></div>
-    <div class="status-body">${loader()}</div>`;
+  el.innerHTML = `<div class="status-body">${loader()}</div>`;
   const body = $('.status-body', el);
   let feed = null;
 
@@ -27,10 +25,9 @@ export async function render({ el }) {
   function ring(group, isMe = false) {
     const viewed = isMe ? false : group.all_viewed;
     const count = group.statuses.length;
-    return `<button class="story ${viewed ? 'viewed' : ''} ${isMe && !count ? 'empty-story' : ''}" data-uid="${group.user.id}">
-      <span class="story-ring">${avatar(group.user, 'lg', { presence: false })}${isMe ? `<span class="story-add">${icon('plus')}</span>` : ''}</span>
-      <span class="story-name">${isMe ? 'My status' : esc(group.user.name.split(' ')[0])}</span>
-      <small class="muted">${count ? timeAgo(group.statuses[count - 1].created_at) : 'Tap to add'}</small>
+    return `<button class="story ${viewed ? 'viewed' : ''} ${isMe && !count ? 'empty-story' : ''}" data-uid="${group.user.id}" title="${count ? timeAgo(group.statuses[count - 1].created_at) : 'Add a status'}">
+      <span class="story-ring">${avatar(group.user, 'lg', { presence: false })}${isMe ? `<span class="story-add" data-act="new" title="New status">${icon('plus')}</span>` : ''}</span>
+      <span class="story-name">${isMe ? 'Your story' : esc(group.user.name.split(' ')[0])}</span>
     </button>`;
   }
 
@@ -39,38 +36,46 @@ export async function render({ el }) {
     const unseen = feed.groups.filter((g) => !g.all_viewed);
     const seen = feed.groups.filter((g) => g.all_viewed);
     const presenceOpts = [['online', 'Online'], ['away', 'Away'], ['busy', 'Busy'], ['invisible', 'Invisible']];
+    const myPresence = me.presence === 'invisible' ? 'offline' : me.presence;
+    const presenceSub = { online: 'Online · visible to friends', away: 'Away · visible to friends', busy: 'Busy · do not disturb', invisible: 'Invisible · you appear offline' };
+    const online = feed.friends.filter((f) => f.presence !== 'offline');
+    const others = feed.friends.filter((f) => f.presence === 'offline');
     body.innerHTML = `
-      <section class="card my-presence">
-        <div class="mp-left">${avatar({ ...me.user, presence: me.presence === 'invisible' ? 'offline' : me.presence }, 'lg')}
-          <div><strong>${esc(me.user.name)}</strong><div class="muted small">${levelPill(me.user.level)} ${esc(me.user.rank)}</div></div></div>
+      <section class="gvi-panel gvi-status-composer my-presence">
+        <div class="sc-id">${ringAvatar({ ...me.user, presence: myPresence }, 60, { presence: true })}
+          <div><strong>${esc(me.user.name)}</strong><small class="mp-sub">${esc(presenceSub[me.presence] || '')}</small></div></div>
         <form class="mp-form">
-          <div class="segmented small">${presenceOpts.map(([k, l]) => `<label><input type="radio" name="presence" value="${k}" ${me.presence === k ? 'checked' : ''}><span><span class="presence-dot inline ${k === 'invisible' ? 'offline' : k}"></span>${l}</span></label>`).join('')}</div>
-          <div class="input-with-btn"><input class="input" name="presence_text" maxlength="80" placeholder="What are you up to? e.g. Rewatching trailer 2 🌴" value="${esc(me.presence_text || '')}"><button class="btn btn-ghost btn-sm">Update</button></div>
+          <div class="gvi-seg presence-seg" role="radiogroup" aria-label="Presence">${presenceOpts.map(([k, l]) => `<label class="${me.presence === k ? 'is-active' : ''}"><input type="radio" name="presence" value="${k}" ${me.presence === k ? 'checked' : ''}><span class="pdot ${k === 'invisible' ? 'offline' : k}"></span>${l}</label>`).join('')}</div>
+          <div class="mp-row"><input class="gvi-input" name="presence_text" maxlength="80" placeholder="What are you up to?" aria-label="What are you up to?" value="${esc(me.presence_text || '')}"><button class="gvi-btn">Save</button></div>
         </form>
       </section>
-      <section class="section">
-        <div class="section-head"><h3>Stories</h3><span class="muted small">Disappear after 24 hours</span></div>
+      <section class="gvi-status-section">
+        <div class="gvi-section-head"><h2 class="gvi-section-title">${icon('target')}Stories</h2><button class="gvi-btn ghost sm" data-act="new">${icon('plus')}New status</button></div>
         <div class="stories-row">
           ${ring({ user: me.user, statuses: me.statuses }, true)}
           ${unseen.map((g) => ring(g)).join('')}
           ${seen.map((g) => ring(g)).join('')}
-          ${!feed.groups.length ? `<div class="stories-empty muted small">No stories from other players yet. Add friends to see theirs here!</div>` : ''}
+          ${!feed.groups.length ? `<div class="stories-empty">No stories from other players yet. Add friends to see theirs here — stories disappear after 24 hours.</div>` : ''}
         </div>
       </section>
-      <section class="section">
-        <div class="section-head"><h3>${icon('users')} Friends' status</h3><span class="muted small">${feed.friends.filter((f) => f.presence !== 'offline').length} online</span></div>
-        ${feed.friends.length ? `<div class="presence-list card">${feed.friends.map((f) => `
-          <a class="presence-row" href="#/profile/${f.id}">
-            ${avatar(f, 'md')}
-            <span class="pr-main"><strong>${esc(f.name)}</strong><small class="muted">${esc(presenceLabel(f))}${f.platform ? ' · ' + esc(f.platform) : ''}</small></span>
-            <span class="pr-activity">${f.presence_text ? `“${esc(f.presence_text)}”` : ''}</span>
-            <span class="presence-pill ${esc(f.presence)}">${esc(f.presence === 'offline' ? 'Offline' : f.presence)}</span>
-          </a>`).join('')}</div>` : `<div class="empty small">${icon('users', 'empty-icon')}<p>Add friends to see their status here.</p><a class="btn btn-ghost btn-sm" href="#/friends?tab=find">Find players</a></div>`}
+      <section class="gvi-status-section">
+        ${sectionHead('users', 'Who is online', null)}
+        ${feed.friends.length ? `<div class="friends-grid">${[...online, ...others].map((f) => `
+          <div class="gvi-person-card" data-tilt="card">
+            <a class="pc-top" href="#/profile/${f.id}">${avatar(f, 'md')}<span class="pc-name"><strong>${esc(f.name)}</strong><small>${esc(presenceLabel(f))}${f.presence_text ? ' · ' + esc(f.presence_text) : f.platform ? ' · ' + esc(f.platform) : ''}</small></span></a>
+            <div class="pc-actions"><a class="gvi-btn sm" href="#/friends?tab=chats&user=${f.id}">Message</a><a class="gvi-btn ghost sm" href="#/profile/${f.id}">Profile</a></div>
+            ${glare}
+          </div>`).join('')}</div>` : `<div class="empty small">${icon('users', 'empty-icon')}<p>Add friends to see their status here.</p><a class="gvi-btn ghost sm" href="#/friends?tab=find">Find players</a></div>`}
       </section>`;
 
-    $('.mp-form', body).addEventListener('change', (e) => { if (e.target.name === 'presence') savePresence(); });
+    $('.mp-form', body).addEventListener('change', (e) => {
+      if (e.target.name !== 'presence') return;
+      $$('.presence-seg label', body).forEach((l) => l.classList.toggle('is-active', l.contains(e.target)));
+      savePresence();
+    });
     $('.mp-form', body).addEventListener('submit', (e) => { e.preventDefault(); savePresence(); });
-    $$('.story', body).forEach((s) => s.addEventListener('click', () => {
+    $$('.story', body).forEach((s) => s.addEventListener('click', (e) => {
+      if (e.target.closest('.story-add')) return; // the + badge always creates a new status
       const uid = Number(s.dataset.uid);
       if (uid === me.user.id) {
         if (me.statuses.length) openViewer([{ user: me.user, statuses: me.statuses }], 0, true);
@@ -91,6 +96,10 @@ export async function render({ el }) {
       updateMe({ presence, presence_text });
       feed.me.presence = presence;
       feed.me.presence_text = presence_text;
+      const sub = $('.mp-sub', body);
+      if (sub) sub.textContent = { online: 'Online · visible to friends', away: 'Away · visible to friends', busy: 'Busy · do not disturb', invisible: 'Invisible · you appear offline' }[presence];
+      const dot = $('.sc-id .pdot', body);
+      if (dot) dot.className = 'pdot ' + (presence === 'invisible' ? 'offline' : presence);
       toast('Status updated', 'success');
     } catch (err) {
       toastError(err);

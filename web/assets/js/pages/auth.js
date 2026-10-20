@@ -1,37 +1,56 @@
-// Login / Register (email OTP) / Forgot password / 2-step login screen.
+// Login / Sign up (email OTP) / Forgot password / 2-step login screen.
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
-import { esc, el, $, icon, otpInput, setBusy, toast, countdownParts, pad } from '../core/ui.js';
+import { esc, el, $, icon, otpInput, setBusy, toast, countdownParts } from '../core/ui.js';
+import { heroFx } from '../core/gvi-background.js';
+import { mountCountdown } from '../core/gvi-countdown.js';
+import { logoSvg } from '../core/gvi-nav.js';
+import { releaseDate } from './countdown.js';
+
+function logoBig() {
+  return `<div class="gvi-auth-logo"><span class="gvi-logo3d lg"><span data-tilt="global"><span class="gvi-logo-halo"></span><span class="gvi-logo-base"></span><span class="gvi-logo-rim"></span>${logoSvg(44)}<span class="gvi-logo-gloss"></span></span></span></div>`;
+}
+
+function logoSmall() {
+  return `<span class="gvi-logo3d sm"><span data-tilt="global"><span class="gvi-logo-base"></span>${logoSvg(44)}</span></span>`;
+}
 
 export function renderAuth(root, { message, onLoggedIn, onBanned }) {
   const cfg = state.config || {};
+  const target = releaseDate(cfg.release_at);
+  const daysLeft = countdownParts(target).days;
   root.innerHTML = '';
   const screen = el(`
-    <div class="auth-screen">
-      <section class="auth-hero">
-        <div class="auth-hero-art" style="background-image:url('assets/img/hero.svg')"></div>
-        <div class="auth-hero-content">
-          <div class="brand big"><img src="assets/img/logo.svg" alt="" class="brand-logo"><span class="brand-text"><strong>G VI</strong><small>FAN HUB</small></span></div>
-          <h1 class="hero-title">Your companion<br>for <span class="grad-text">Leonida</span></h1>
-          <p class="hero-sub">Countdown, news, trailers, the interactive map, friends & chat, discussions, polls, events and rewards — all in one place.</p>
-          <div class="mini-countdown" aria-label="Countdown to release"></div>
-          <div class="hero-badges">
-            <span>${icon('map')} Interactive map</span><span>${icon('chat')} Crew chat</span><span>${icon('trophy')} Rewards</span>
+    <div class="gvi-auth">
+      <section class="gvi-auth-hero">
+        <div class="gvi-auth-bg"></div>
+        ${heroFx()}
+        <div class="gvi-auth-shade"></div>
+        ${logoBig()}
+        <div class="gvi-auth-copy">
+          <span class="gvi-eyebrow">${icon('sparkles')}Unofficial fan companion</span>
+          <h1 class="gvi-auth-title">Welcome to Leonida</h1>
+          <p class="gvi-auth-pitch">Countdown, news, trailers, the fan map, friends and chat — everything for the wait, in one place.</p>
+          <div class="gvi-auth-cd"><div class="gvi-micro">Launch in</div><div class="mini-countdown" aria-label="Countdown to release"></div></div>
+          <div class="gvi-auth-chips">
+            <span class="gvi-chip static">${icon('map')}Interactive Leonida map</span>
+            <span class="gvi-chip static">${icon('chat')}Friends &amp; chat</span>
+            <span class="gvi-chip static">${icon('zap')}XP, levels &amp; rewards</span>
           </div>
-          <a class="apk-link" href="downloads/gvi-fan-hub.apk" download>${icon('phone')} Download the Android app</a>
         </div>
       </section>
-      <section class="auth-panel">
-        <div class="auth-card">
-          <div class="auth-tabs" role="tablist">
-            <button class="auth-tab active" data-tab="login" role="tab">Log in</button>
-            <button class="auth-tab" data-tab="register" role="tab">Register</button>
+      <section class="gvi-auth-panel">
+        <div class="gvi-auth-card">
+          <div class="gvi-auth-brand">${logoSmall()}<span class="gvi-brand-text"><strong class="gvi-wordmark big">G VI</strong><small class="gvi-wordmark-sub">FAN HUB</small></span></div>
+          <div class="gvi-auth-tabs" role="tablist">
+            <button class="auth-tab is-active" data-tab="login" role="tab" aria-selected="true">Log in</button>
+            <button class="auth-tab" data-tab="register" role="tab" aria-selected="false">Sign up</button>
           </div>
           <div class="auth-alert" hidden></div>
           <div class="auth-body"></div>
-          <div class="auth-foot">
-            <a href="admin/" class="admin-link">${icon('shield')} Admin login</a>
-            <span class="muted tiny">Unofficial fan app · not affiliated with Rockstar Games</span>
+          <div class="gvi-auth-foot">
+            <span>Unofficial fan app. Not affiliated with Rockstar Games or Take-Two Interactive.</span>
+            <span class="gvi-auth-links"><a href="admin/" class="admin-link">${icon('shield')}Admin login</a><a class="apk-link" href="downloads/gvi-fan-hub.apk" download>${icon('phone')}Android app</a></span>
           </div>
         </div>
       </section>
@@ -58,7 +77,11 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
   }
 
   function setTab(tab) {
-    screen.querySelectorAll('.auth-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+    screen.querySelectorAll('.auth-tab').forEach((t) => {
+      const on = t.dataset.tab === tab;
+      t.classList.toggle('is-active', on);
+      t.setAttribute('aria-selected', String(on));
+    });
     clearTimers();
     showAlert(null);
     if (tab === 'login') renderLogin();
@@ -68,17 +91,15 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
   screen.querySelectorAll('.auth-tab').forEach((t) => t.addEventListener('click', () => setTab(t.dataset.tab)));
 
   // ------------------------------------------------- mini countdown
-  const cd = $('.mini-countdown', screen);
-  const target = new Date(cfg.release_at || '2026-11-19T00:00:00');
-  const tick = () => {
-    const p = countdownParts(target);
-    cd.innerHTML = p.done
-      ? `<div class="cd-out">${esc(cfg.release_title || 'GTA VI')} is OUT NOW!</div>`
-      : `<div class="cd-label">${esc(cfg.release_title || 'Grand Theft Auto VI')} launches in</div>
-         <div class="cd-row">${[['days', p.days], ['hrs', p.hours], ['min', p.minutes], ['sec', p.seconds]].map(([l, v]) => `<div class="cd-cell"><b>${l === 'days' ? v : pad(v)}</b><span>${l}</span></div>`).join('')}</div>`;
-  };
-  tick();
-  const cdTimer = setInterval(tick, 1000);
+  const cdEl = $('.mini-countdown', screen);
+  let stopCd = () => {};
+  if (countdownParts(target).done) {
+    cdEl.innerHTML = `<div class="gvi-out-now">${esc(cfg.release_title || 'GTA VI')} is OUT NOW!</div>`;
+  } else {
+    stopCd = mountCountdown(cdEl, target, { size: 'mini', labels: ['Days', 'Hrs', 'Min', 'Sec'] });
+  }
+
+  const intro = (title) => `<h2 class="gvi-auth-h">${title}</h2><p class="gvi-auth-sub">${daysLeft > 0 ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} to go. Your streak is waiting.` : 'Leonida is open. Your crew is waiting.'}</p>`;
 
   function passwordToggle(container) {
     container.querySelectorAll('.pw-toggle').forEach((btn) => {
@@ -91,7 +112,7 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
   }
 
   function pwField(name, label, autocomplete) {
-    return `<label class="field"><span>${label}</span><div class="input-wrap"><input class="input" type="password" name="${name}" autocomplete="${autocomplete}" required minlength="8" maxlength="72"><button type="button" class="pw-toggle" tabindex="-1" aria-label="Show password">${icon('eye')}</button></div></label>`;
+    return `<label class="gvi-field"><span>${label}</span><div class="input-wrap"><input class="gvi-input" type="password" name="${name}" placeholder="••••••••" autocomplete="${autocomplete}" required minlength="8" maxlength="72"><button type="button" class="pw-toggle" tabindex="-1" aria-label="Show password">${icon('eye')}</button></div></label>`;
   }
 
   function strengthMeter(input, meter) {
@@ -138,23 +159,20 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
   function renderLogin(prefillEmail = '') {
     body.innerHTML = `
       <form class="auth-form" novalidate>
-        <h2>Welcome back</h2>
-        <p class="muted">Log in to continue to G VI Fan Hub.</p>
-        <label class="field"><span>Email or username</span><input class="input" name="email" type="text" autocomplete="username" required value="${esc(prefillEmail)}"></label>
+        ${intro('Welcome back')}
+        <label class="gvi-field"><span>Email or username</span><input class="gvi-input" name="email" type="text" placeholder="you@example.com" autocomplete="username" required value="${esc(prefillEmail)}"></label>
         ${pwField('password', 'Password', 'current-password')}
-        <div class="row-between">
+        <div class="gvi-auth-row">
           <label class="check"><input type="checkbox" name="remember" checked><span>Keep me signed in</span></label>
           <button type="button" class="link-btn" data-act="forgot">Forgot password?</button>
         </div>
-        <button class="btn btn-primary btn-block btn-lg" type="submit">Log in</button>
-        <p class="switch-text">New here? <button type="button" class="link-btn" data-act="to-register">Create an account</button></p>
+        <button class="gvi-cta" type="submit">Enter the hub${icon('chevronRight')}</button>
       </form>`;
     const form = $('form', body);
     passwordToggle(form);
     if (!prefillEmail) form.email.focus();
     else form.password.focus();
     $('[data-act="forgot"]', form).addEventListener('click', () => renderForgot(form.email.value.includes('@') ? form.email.value : ''));
-    $('[data-act="to-register"]', form).addEventListener('click', () => setTab('register'));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       showAlert(null);
@@ -183,10 +201,10 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
     body.innerHTML = `
       <div class="auth-form">
         <button class="link-btn back-link" data-act="back">${icon('chevronLeft')} Back</button>
-        <h2>2-step verification</h2>
-        <p class="muted">We emailed a 6-digit code to <strong>${esc(data.email_hint)}</strong>. Enter it below to finish logging in.</p>
+        <h2 class="gvi-auth-h">2-step verification</h2>
+        <p class="gvi-auth-sub">We emailed a 6-digit code to <strong>${esc(data.email_hint)}</strong>. Enter it below to finish logging in.</p>
         <div class="otp-slot"></div>
-        <button class="btn btn-primary btn-block btn-lg" data-act="verify">Verify & log in</button>
+        <button class="gvi-cta" data-act="verify">Verify &amp; enter${icon('chevronRight')}</button>
         <p class="switch-text">Didn't get it? <button class="link-btn" data-act="resend">Resend code</button></p>
       </div>`;
     const otp = otpInput((code) => verify(code));
@@ -229,16 +247,15 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
   function renderRegister() {
     body.innerHTML = `
       <form class="auth-form" novalidate>
-        <h2>Create your account</h2>
-        <p class="muted">Join the crew — it takes less than a minute.</p>
-        <label class="field"><span>Name</span><input class="input" name="name" autocomplete="name" maxlength="80" required></label>
-        <label class="field"><span>Email ID</span>
+        ${intro('Create your account')}
+        <label class="gvi-field"><span>Display name</span><input class="gvi-input" name="name" placeholder="How should we call you?" autocomplete="name" maxlength="80" required></label>
+        <label class="gvi-field"><span>Email</span>
           <div class="input-with-btn">
-            <input class="input" name="email" type="email" autocomplete="email" maxlength="190" required>
-            <button type="button" class="btn btn-ghost btn-sm" data-act="send-otp">Send OTP</button>
+            <input class="gvi-input" name="email" type="email" placeholder="you@example.com" autocomplete="email" maxlength="190" required>
+            <button type="button" class="gvi-btn ghost sm" data-act="send-otp">Send OTP</button>
           </div>
         </label>
-        <div class="field otp-field" data-disabled="1">
+        <div class="gvi-field otp-field" data-disabled="1">
           <span>Email OTP <small class="muted otp-hint">— press “Send OTP” to get a code</small></span>
           <div class="otp-slot"></div>
         </div>
@@ -246,8 +263,7 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
         <div class="strength" data-score="0"><i></i><i></i><i></i><i></i><i></i><span></span></div>
         ${pwField('confirm_password', 'Confirm password', 'new-password')}
         <p class="muted tiny">At least 8 characters with a letter and a number.</p>
-        <button class="btn btn-primary btn-block btn-lg" type="submit">Verify & create account</button>
-        <p class="switch-text">Already registered? <button type="button" class="link-btn" data-act="to-login">Log in</button></p>
+        <button class="gvi-cta" type="submit">Create account${icon('chevronRight')}</button>
       </form>`;
     const form = $('form', body);
     passwordToggle(form);
@@ -257,7 +273,6 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
     $('.otp-slot', form).appendChild(otp.el);
     otp.setDisabled(true);
     const sendBtn = $('[data-act="send-otp"]', form);
-    $('[data-act="to-login"]', form).addEventListener('click', () => setTab('login'));
 
     sendBtn.addEventListener('click', async () => {
       showAlert(null);
@@ -322,24 +337,24 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
 
   // ---------------------------------------------------------- forgot
   function renderForgot(prefill = '') {
-    screen.querySelectorAll('.auth-tab').forEach((t) => t.classList.remove('active'));
+    screen.querySelectorAll('.auth-tab').forEach((t) => t.classList.remove('is-active'));
     showAlert(null);
     body.innerHTML = `
       <form class="auth-form" novalidate>
         <button type="button" class="link-btn back-link" data-act="back">${icon('chevronLeft')} Back to login</button>
-        <h2>Reset your password</h2>
-        <p class="muted">Enter your account email. We'll send you a one-time code to set a new password.</p>
-        <label class="field"><span>Email ID</span>
+        <h2 class="gvi-auth-h">Reset your password</h2>
+        <p class="gvi-auth-sub">Enter your account email. We'll send you a one-time code to set a new password.</p>
+        <label class="gvi-field"><span>Email</span>
           <div class="input-with-btn">
-            <input class="input" name="email" type="email" autocomplete="email" required value="${esc(prefill)}">
-            <button type="button" class="btn btn-ghost btn-sm" data-act="send">Send code</button>
+            <input class="gvi-input" name="email" type="email" placeholder="you@example.com" autocomplete="email" required value="${esc(prefill)}">
+            <button type="button" class="gvi-btn ghost sm" data-act="send">Send code</button>
           </div>
         </label>
         <div class="reset-step" hidden>
-          <div class="field"><span>Code from email</span><div class="otp-slot"></div></div>
+          <div class="gvi-field"><span>Code from email</span><div class="otp-slot"></div></div>
           ${pwField('password', 'New password', 'new-password')}
           ${pwField('confirm_password', 'Confirm new password', 'new-password')}
-          <button class="btn btn-primary btn-block btn-lg" type="submit">Set new password</button>
+          <button class="gvi-cta" type="submit">Set new password${icon('chevronRight')}</button>
         </div>
       </form>`;
     const form = $('form', body);
@@ -388,8 +403,8 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
 
   function finish(data) {
     clearTimers();
-    clearInterval(cdTimer);
-    toast(`Welcome, ${data.user.name}!`, 'success');
+    stopCd();
+    toast(`Welcome back, ${data.user.name}${data.user.login_streak > 1 ? ` · ${data.user.login_streak}-day streak` : ''}`, 'success');
     onLoggedIn(data);
   }
 

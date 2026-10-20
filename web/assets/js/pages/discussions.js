@@ -1,7 +1,8 @@
 // Discussion articles: list, read, write, like, comment, reply, report.
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
-import { esc, $, $$, icon, avatar, levelPill, timeAgo, fmtDateTime, richText, asset, openModal, confirmBox, toast, toastError, setBusy, debounce, emptyState, errorState, loader, shareLink, appLink, reportDialog, userName } from '../core/ui.js';
+import { esc, $, $$, icon, avatar, levelPill, timeAgo, fmtDateTime, richText, asset, openModal, confirmBox, toast, toastError, setBusy, debounce, emptyState, errorState, loader, shareLink, appLink, reportDialog, userName, presenceLabel } from '../core/ui.js';
+import { glare, pageHead } from '../core/gvi-ui.js';
 import { navigate, setQuery } from '../core/router.js';
 
 export async function render(ctx) {
@@ -9,43 +10,67 @@ export async function render(ctx) {
   return renderList(ctx);
 }
 
+const SORTS = [['new', 'Newest'], ['active', 'Active'], ['top', 'Top']];
+
 function discCard(d) {
-  return `<a class="card disc-card" href="#/discussions/${d.id}">
-    ${d.cover_image ? `<span class="dc-cover"><img src="${esc(asset(d.cover_image))}" alt="" loading="lazy"></span>` : ''}
-    <span class="dc-body">
-      <span class="dc-tags">${d.is_pinned ? `<span class="tag tag-hot">${icon('pin')} Pinned</span>` : ''}<span class="tag">${esc(d.category)}</span>${d.is_locked ? `<span class="tag">${icon('lock')} Locked</span>` : ''}</span>
-      <strong class="dc-title">${esc(d.title)}</strong>
-      <span class="dc-excerpt muted">${esc(d.excerpt)}</span>
-      <span class="dc-foot">
-        <span class="dc-author">${avatar(d.author, 'xs', { presence: false })}<span>${esc(d.author.name)}</span>${levelPill(d.author.level)}<span class="muted">· ${timeAgo(d.created_at)}</span></span>
-        <span class="dc-stats"><span class="${d.liked ? 'liked' : ''}">${icon('heart')} ${d.likes_count}</span><span>${icon('discuss')} ${d.comments_count}</span><span>${icon('eye')} ${d.views}</span></span>
+  return `<article class="gvi-disc-card" data-id="${d.id}" data-tilt="card">
+    <a class="dcc-av" href="#/profile/${d.author.id}" tabindex="-1">${avatar(d.author, 'md', { presence: false })}</a>
+    <div class="dcc-main">
+      <span class="dcc-meta"><span class="dcc-tag">${esc(d.category)}</span>${d.is_pinned ? `<span class="dcc-flag">${icon('pin')}Pinned</span>` : ''}${d.is_locked ? `<span class="dcc-flag">${icon('lock')}Locked</span>` : ''}<span>${esc(d.author.name)} · ${timeAgo(d.created_at)}</span></span>
+      <a class="dcc-title" href="#/discussions/${d.id}">${esc(d.title)}</a>
+      <span class="dcc-foot">
+        <button class="dcc-like ${d.liked ? 'liked' : ''}" data-like aria-label="Like">${icon('heart')}<span>${d.likes_count}</span></button>
+        <span class="dcc-stat">${icon('discuss')}${d.comments_count}</span>
+        <span class="dcc-open">Open${icon('chevronRight')}</span>
       </span>
-    </span>
-  </a>`;
+    </div>
+    ${d.cover_image ? `<span class="dcc-cover"><img src="${esc(asset(d.cover_image))}" alt="" loading="lazy"></span>` : ''}
+    ${glare}
+  </article>`;
 }
 
 async function renderList({ el, query }) {
-  const cats = (state.config && state.config.discussion_categories) || [];
   let page = 1;
   let category = query.category || '';
-  let sort = query.sort || 'new';
+  let sort = SORTS.some(([k]) => k === query.sort) ? query.sort : 'new';
   let q = query.q || '';
   el.innerHTML = `
-    <div class="page-head">
-      <div><h2>${icon('discuss')} Discussions</h2><p class="muted">Write articles, share theories and talk GTA VI with the community.</p></div>
-      <button class="btn btn-primary" data-act="new">${icon('edit')} Start a discussion</button>
-    </div>
-    <div class="filter-bar">
-      <div class="chip-row scroll">${['', ...cats].map((c) => `<button class="chip ${c === category ? 'active' : ''}" data-cat="${esc(c)}">${c ? esc(c) : 'All'}</button>`).join('')}</div>
-      <div class="filter-right">
-        <div class="search-input small">${icon('search')}<input type="search" placeholder="Search…" value="${esc(q)}"></div>
-        <select class="input select small sort">${[['new', 'Newest'], ['active', 'Recently active'], ['top', 'Top']].map(([v, l]) => `<option value="${v}" ${v === sort ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    ${pageHead('discuss', 'Discussions', 'Theories, articles and hot takes. Likes and replies earn XP.', `<button class="gvi-btn" data-act="new">${icon('plus')}New discussion</button>`)}
+    <div class="gvi-disc-layout">
+      <div class="gvi-disc-main">
+        <div class="gvi-disc-tools">
+          <div class="gvi-search-inline small">${icon('search')}<input type="search" class="gvi-input" placeholder="Search discussions…" value="${esc(q)}" aria-label="Search discussions"></div>
+          <div class="gvi-seg sort-seg">${SORTS.map(([k, l]) => `<button data-sort="${k}" class="${k === sort ? 'is-active' : ''}">${l}</button>`).join('')}</div>
+        </div>
+        <div class="disc-list"></div>
+        <div class="load-more-wrap"></div>
       </div>
-    </div>
-    <div class="disc-list"></div>
-    <div class="load-more-wrap"></div>`;
+      <aside class="gvi-disc-side">
+        <section class="gvi-panel side-card"><div class="side-title">${icon('fire')}Hot categories</div><div class="hot-cats"></div></section>
+        <section class="gvi-panel side-card"><div class="side-title">${icon('crown')}Top contributors this week</div><div class="top-contrib"><p class="muted small">Loading…</p></div></section>
+      </aside>
+    </div>`;
   const list = $('.disc-list', el);
   const more = $('.load-more-wrap', el);
+  const cats = (state.config && state.config.discussion_categories) || [];
+
+  let showAllCats = false;
+  let hotCats = null;
+  function drawCats() {
+    const names = hotCats ? hotCats.map((h) => h.name) : cats;
+    const shown = showAllCats ? names : names.filter((c, i) => i < 6 || c === category);
+    const hidden = names.length - shown.length;
+    $('.hot-cats', el).innerHTML = ['', ...shown].map((c) => `<button class="gvi-pill ${c === category ? 'is-active' : ''}" data-cat="${esc(c)}">${c ? esc(c) : 'All'}</button>`).join('') +
+      (hidden ? `<button class="gvi-pill more" data-more-cats>+${hidden} more</button>` : '');
+  }
+  function drawContributors(top) {
+    $('.top-contrib', el).innerHTML = top.length ? top.map((t) => `
+      <a class="contrib-row" href="#/profile/${t.user.id}">${avatar(t.user, 'sm', { presence: false })}
+        <span class="lr-main"><strong>${esc(t.user.name)}</strong><small>${esc(t.user.presence_text || presenceLabel(t.user))}</small></span>
+        <span class="xp-chip">${icon('zap')}${t.xp} XP</span></a>`).join('')
+      : '<p class="muted small">No activity this week yet — start a discussion to top the board.</p>';
+  }
+  drawCats();
 
   async function load(reset) {
     if (reset) {
@@ -55,12 +80,14 @@ async function renderList({ el, query }) {
     try {
       const data = await api.get('discussions/list', { page, category, sort, q });
       if (reset) list.innerHTML = '';
+      if (data.hot_categories) { hotCats = data.hot_categories; drawCats(); }
+      if (data.contributors) drawContributors(data.contributors);
       if (!data.items.length && page === 1) {
-        list.innerHTML = emptyState('discuss', 'No discussions here yet', 'Be the first to start one!', `<button class="btn btn-primary" data-act="new">${icon('edit')} Start a discussion</button>`);
+        list.innerHTML = emptyState('discuss', 'No discussions here yet', 'Be the first to start one!', `<button class="gvi-btn" data-act="new">${icon('plus')}New discussion</button>`);
       } else {
         list.insertAdjacentHTML('beforeend', data.items.map(discCard).join(''));
       }
-      more.innerHTML = data.has_more ? '<button class="btn btn-ghost">Load more</button>' : '';
+      more.innerHTML = data.has_more ? `<button class="gvi-btn ghost">${icon('refresh')}Load more</button>` : '';
       const b = $('button', more);
       if (b) b.addEventListener('click', () => { setBusy(b, true); page++; load(false); });
     } catch (err) {
@@ -69,16 +96,42 @@ async function renderList({ el, query }) {
     }
   }
 
-  $$('[data-cat]', el).forEach((c) => c.addEventListener('click', () => {
-    category = c.dataset.cat;
-    $$('[data-cat]', el).forEach((x) => x.classList.toggle('active', x === c));
-    setQuery({ category });
-    load(true);
-  }));
-  $('.sort', el).addEventListener('change', (e) => { sort = e.target.value; setQuery({ sort }); load(true); });
-  $('.filter-right input', el).addEventListener('input', debounce((e) => { q = e.target.value.trim(); setQuery({ q }); load(true); }, 350));
-  el.addEventListener('click', (e) => {
-    if (e.target.closest('[data-act="new"]')) editor(null, (id) => navigate('#/discussions/' + id));
+  $('.gvi-disc-tools input', el).addEventListener('input', debounce((e) => { q = e.target.value.trim(); setQuery({ q }); load(true); }, 350));
+  el.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-act="new"]')) return editor(null, (id) => navigate('#/discussions/' + id));
+    if (e.target.closest('[data-more-cats]')) {
+      showAllCats = true;
+      return drawCats();
+    }
+    const cat = e.target.closest('[data-cat]');
+    if (cat) {
+      category = cat.dataset.cat;
+      $$('[data-cat]', el).forEach((x) => x.classList.toggle('is-active', x === cat));
+      setQuery({ category });
+      return load(true);
+    }
+    const so = e.target.closest('[data-sort]');
+    if (so) {
+      sort = so.dataset.sort;
+      $$('[data-sort]', el).forEach((x) => x.classList.toggle('is-active', x === so));
+      setQuery({ sort });
+      return load(true);
+    }
+    const card = e.target.closest('.gvi-disc-card');
+    if (!card) return;
+    const like = e.target.closest('[data-like]');
+    if (like) {
+      e.preventDefault();
+      try {
+        const r = await api.post('discussions/like', { id: Number(card.dataset.id) });
+        like.classList.toggle('liked', r.liked);
+        $('span', like).textContent = r.likes_count;
+      } catch (err) {
+        toastError(err);
+      }
+      return;
+    }
+    if (!e.target.closest('a')) navigate('#/discussions/' + card.dataset.id);
   });
   if (query.new) {
     setQuery({ new: null, title: null });
@@ -156,7 +209,7 @@ async function renderDetail({ el, params }) {
   try {
     data = await api.get('discussions/get', { id: params.id });
   } catch (err) {
-    el.innerHTML = `<a class="back-link" href="#/discussions">${icon('chevronLeft')} Discussions</a>`;
+    el.innerHTML = `<a class="gvi-back" href="#/discussions">${icon('chevronLeft')}Discussions</a>`;
     el.appendChild(errorState(err));
     return;
   }
@@ -198,26 +251,28 @@ async function renderDetail({ el, params }) {
   }
 
   el.innerHTML = `
-    <article class="article discussion">
-      <a class="back-link" href="#/discussions">${icon('chevronLeft')} Discussions</a>
-      ${d.cover_image ? `<div class="article-cover"><img src="${esc(asset(d.cover_image))}" alt=""></div>` : ''}
-      <div class="dc-tags">${d.is_pinned ? `<span class="tag tag-hot">${icon('pin')} Pinned</span>` : ''}<span class="tag">${esc(d.category)}</span>${d.is_locked ? `<span class="tag">${icon('lock')} Comments closed</span>` : ''}</div>
-      <h1 class="article-title">${esc(d.title)}</h1>
-      <div class="author-row">
-        <a href="#/profile/${d.author.id}">${avatar(d.author, 'md')}</a>
-        <div><div>${userName(d.author)} ${levelPill(d.author.level)}</div><span class="muted small">${fmtDateTime(d.created_at)}${d.updated_at ? ' · edited' : ''} · ${icon('eye')} ${d.views} views</span></div>
-      </div>
-      <div class="article-body prose">${richText(d.body)}</div>
-      <div class="article-actions">
-        <button class="btn ${d.liked ? 'btn-liked' : 'btn-ghost'}" data-act="like">${icon('heart')} <span>${d.likes_count}</span></button>
-        <button class="btn btn-ghost" data-act="share">${icon('share')} Share</button>
-        ${d.own ? `<button class="btn btn-ghost" data-act="edit">${icon('edit')} Edit</button><button class="btn btn-ghost danger" data-act="delete">${icon('trash')} Delete</button>` : `<button class="btn btn-ghost" data-act="report">${icon('flag')} Report</button>`}
+    <article class="gvi-article gvi-discussion">
+      <a class="gvi-back" href="#/discussions">${icon('chevronLeft')}Discussions</a>
+      ${d.cover_image ? `<div class="gvi-article-cover"><span class="gvi-media big"><img src="${esc(asset(d.cover_image))}" alt=""></span></div>` : ''}
+      <div class="gvi-article-card gvi-panel ${d.cover_image ? '' : 'no-cover'}">
+        <div class="dcc-meta"><span class="dcc-tag">${esc(d.category)}</span>${d.is_pinned ? `<span class="dcc-flag">${icon('pin')}Pinned</span>` : ''}${d.is_locked ? `<span class="dcc-flag">${icon('lock')}Comments closed</span>` : ''}</div>
+        <h1 class="gvi-article-title">${esc(d.title)}</h1>
+        <div class="gvi-author-row">
+          <a href="#/profile/${d.author.id}">${avatar(d.author, 'md')}</a>
+          <div><div>${userName(d.author)} ${levelPill(d.author.level)}</div><small>${fmtDateTime(d.created_at)}${d.updated_at ? ' · edited' : ''} · ${icon('eye')} ${d.views} views</small></div>
+        </div>
+        <div class="gvi-article-body prose">${richText(d.body)}</div>
+        <div class="gvi-article-actions article-actions">
+          <button class="gvi-btn ghost ${d.liked ? 'liked' : ''}" data-act="like">${icon('heart')}<span>${d.likes_count}</span></button>
+          <button class="gvi-btn ghost" data-act="share">${icon('share')}Share</button>
+          ${d.own ? `<button class="gvi-btn ghost" data-act="edit">${icon('edit')}Edit</button><button class="gvi-btn danger" data-act="delete">${icon('trash')}Delete</button>` : `<button class="gvi-btn ghost" data-act="report">${icon('flag')}Report</button>`}
+        </div>
       </div>
     </article>
-    <section class="comments card">
-      <h3>${icon('discuss')} Comments (<span class="comments-count">0</span>)</h3>
+    <section class="gvi-comments gvi-panel comments">
+      <h2 class="gvi-section-title">${icon('discuss')}<span>Comments (<span class="comments-count">0</span>)</span></h2>
       ${d.is_locked ? `<p class="muted">${icon('lock')} Comments are closed on this discussion.</p>` : `
-      <form class="comment-form">${avatar(state.me, 'sm', { presence: false })}<textarea class="input" rows="2" maxlength="3000" placeholder="Add a comment… (+5 XP)"></textarea><button class="btn btn-primary">${icon('send')}</button></form>`}
+      <form class="comment-form">${avatar(state.me, 'sm', { presence: false })}<textarea class="gvi-input" rows="2" maxlength="3000" placeholder="Add a comment… (+5 XP)" aria-label="Add a comment"></textarea><button class="composer-send" aria-label="Post comment">${icon('send')}</button></form>`}
       <div class="comment-list"></div>
     </section>`;
   drawComments();
@@ -229,7 +284,7 @@ async function renderDetail({ el, params }) {
       if (act === 'like') {
         const r = await api.post('discussions/like', { id: d.id });
         const b = e.target.closest('button');
-        b.className = `btn ${r.liked ? 'btn-liked' : 'btn-ghost'}`;
+        b.classList.toggle('liked', r.liked);
         $('span', b).textContent = r.likes_count;
       } else if (act === 'share') {
         shareLink(d.title, appLink('#/discussions/' + d.id));
@@ -292,7 +347,7 @@ async function renderDetail({ el, params }) {
       } else if (act === 'reply' || act === 'edit') {
         const slot = $('.reply-slot', box);
         if (slot.innerHTML) { slot.innerHTML = ''; return; }
-        slot.innerHTML = `<form class="comment-form inline"><textarea class="input" rows="2" maxlength="3000" placeholder="${act === 'reply' ? 'Write a reply…' : ''}">${act === 'edit' ? esc(c.body) : ''}</textarea><button class="btn btn-primary btn-sm">${act === 'reply' ? 'Reply' : 'Save'}</button></form>`;
+        slot.innerHTML = `<form class="comment-form inline"><textarea class="gvi-input" rows="2" maxlength="3000" placeholder="${act === 'reply' ? 'Write a reply…' : ''}">${act === 'edit' ? esc(c.body) : ''}</textarea><button class="gvi-btn sm">${act === 'reply' ? 'Reply' : 'Save'}</button></form>`;
         const f = $('form', slot);
         const ta = $('textarea', f);
         ta.focus();

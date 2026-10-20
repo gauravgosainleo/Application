@@ -3,6 +3,7 @@ import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { esc, $, $$, icon, asset, avatar, timeAgo, openModal, confirmBox, toast, toastError, setBusy, emptyState, errorState, loader, youtubeEmbed, videoPlayer, reportDialog } from '../core/ui.js';
 import { setQuery } from '../core/router.js';
+import { glare, pageHead, tint } from '../core/gvi-ui.js';
 
 const SCOPES = [['all', 'All'], ['official', 'Official'], ['community', 'Community'], ['mine', 'My uploads']];
 const TYPES = [['all', 'All media'], ['photo', 'Photos'], ['video', 'Videos']];
@@ -14,13 +15,10 @@ export async function render({ el, query }) {
   let items = [];
 
   el.innerHTML = `
-    <div class="page-head">
-      <div><h2>${icon('image')} Photo & Video Gallery</h2><p class="muted">Official media and the best shots from the community.</p></div>
-      <button class="btn btn-primary" data-act="upload">${icon('upload')} Upload</button>
-    </div>
-    <div class="filter-bar">
-      <div class="tabs small">${SCOPES.map(([k, l]) => `<button class="tab ${k === scope ? 'active' : ''}" data-scope="${k}">${l}</button>`).join('')}</div>
-      <div class="chip-row">${TYPES.map(([k, l]) => `<button class="chip ${k === type ? 'active' : ''}" data-type="${k}">${l}</button>`).join('')}</div>
+    ${pageHead('image', 'Gallery', 'Screenshots, frames, fan art and videos. Each approved upload earns 10 XP.', `<button class="gvi-btn" data-act="upload">${icon('upload')}Upload</button>`)}
+    <div class="gvi-gal-tools">
+      <div class="gvi-seg">${SCOPES.map(([k, l]) => `<button class="${k === scope ? 'is-active' : ''}" data-scope="${k}">${l}</button>`).join('')}</div>
+      <div class="gvi-chip-row">${TYPES.map(([k, l]) => `<button class="gvi-chip ${k === type ? 'is-active' : ''}" data-type="${k}">${l}</button>`).join('')}</div>
     </div>
     <div class="gallery-wrap">${loader()}</div>
     <div class="load-more-wrap"></div>`;
@@ -28,13 +26,17 @@ export async function render({ el, query }) {
   const more = $('.load-more-wrap', el);
 
   function tile(g, i) {
-    return `<button class="g-tile ${g.media_type}" data-index="${i}">
-      ${g.thumbnail ? `<img src="${esc(asset(g.thumbnail))}" alt="" loading="lazy">` : `<span class="g-video-ph">${icon('film')}</span>`}
-      ${g.media_type === 'video' ? `<span class="play-badge sm">${icon('play')}</span>` : ''}
-      ${g.status !== 'approved' ? `<span class="tag tag-${g.status === 'pending' ? 'warn' : 'danger'} g-status">${g.status === 'pending' ? 'Awaiting approval' : 'Not approved'}</span>` : ''}
-      ${g.is_official ? `<span class="tag tag-hot g-official">${icon('star')} Official</span>` : ''}
-      <span class="g-info"><span>${esc(g.title || (g.media_type === 'video' ? 'Video' : 'Photo'))}</span><span>${icon('heart')} ${g.likes_count}</span></span>
-    </button>`;
+    const span = i % 6 === 0 || i % 6 === 4 ? 2 : 1;
+    const by = g.author ? '@' + g.author.username : 'Official';
+    return `<div class="gvi-gal-tile g-tile ${g.media_type}" data-index="${i}" role="button" tabindex="0" style="--span:${span};${tint(g.id)}" data-tilt="card">
+      ${g.thumbnail ? `<img src="${esc(asset(g.thumbnail))}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+      <span class="gt-shade"></span>
+      ${g.media_type === 'video' ? `<span class="gvi-play gt-play">${icon('play')}</span>` : ''}
+      <span class="gt-tags">${g.is_official ? `<span class="gt-tag official">${icon('star')}Official</span>` : ''}${g.status !== 'approved' ? `<span class="gt-tag ${g.status === 'pending' ? 'pending' : 'rejected'}">${g.status === 'pending' ? 'Awaiting approval' : 'Not approved'}</span>` : ''}</span>
+      <span class="gt-foot"><span class="gt-text"><strong>${esc(g.title || (g.media_type === 'video' ? 'Video' : 'Photo'))}</strong><small>${esc(by)}</small></span>
+        ${g.status === 'approved' ? `<button class="gt-like ${g.liked ? 'liked' : ''}" data-like aria-label="Like">${icon('heart')}<span>${g.likes_count}</span></button>` : ''}</span>
+      ${glare}
+    </div>`;
   }
 
   async function load(reset) {
@@ -47,13 +49,13 @@ export async function render({ el, query }) {
       const data = await api.get('gallery/list', { scope, type, page });
       const start = items.length;
       items = items.concat(data.items);
-      if (reset) wrap.innerHTML = '<div class="masonry"></div>';
+      if (reset) wrap.innerHTML = '<div class="gvi-gallery-grid"></div>';
       if (!items.length) {
-        wrap.innerHTML = emptyState('image', scope === 'mine' ? 'You have not uploaded anything yet' : 'The gallery is empty', 'Upload your favourite GTA VI screenshots, fan art or videos.', `<button class="btn btn-primary" data-act="upload">${icon('upload')} Upload</button>`);
+        wrap.innerHTML = emptyState('image', scope === 'mine' ? 'You have not uploaded anything yet' : 'The gallery is empty', 'Upload your favourite GTA VI screenshots, fan art or videos.', `<button class="gvi-btn" data-act="upload">${icon('upload')}Upload</button>`);
       } else {
-        $('.masonry', wrap).insertAdjacentHTML('beforeend', data.items.map((g, i) => tile(g, start + i)).join(''));
+        $('.gvi-gallery-grid', wrap).insertAdjacentHTML('beforeend', data.items.map((g, i) => tile(g, start + i)).join(''));
       }
-      more.innerHTML = data.has_more ? '<button class="btn btn-ghost">Load more</button>' : '';
+      more.innerHTML = data.has_more ? `<button class="gvi-btn ghost">${icon('refresh')}Load more</button>` : '';
       const b = $('button', more);
       if (b) b.addEventListener('click', () => { setBusy(b, true); page++; load(false); });
     } catch (err) {
@@ -83,8 +85,8 @@ export async function render({ el, query }) {
             <span class="muted small">${g.author ? `${avatar(g.author, 'xs', { presence: false })} <a href="#/profile/${g.author.id}">${esc(g.author.name)}</a>` : `${icon('star')} Official`} · ${timeAgo(g.created_at)}</span>
           </div>
           <div class="row gap">
-            ${g.status === 'approved' ? `<button class="btn ${g.liked ? 'btn-liked' : 'btn-ghost'} btn-sm" data-lb="like">${icon('heart')} <span>${g.likes_count}</span></button>` : ''}
-            ${g.own ? `<button class="btn btn-ghost btn-sm danger" data-lb="delete">${icon('trash')}</button>` : (g.author ? `<button class="btn btn-ghost btn-sm" data-lb="report">${icon('flag')}</button>` : '')}
+            ${g.status === 'approved' ? `<button class="gvi-btn ghost sm lb-like ${g.liked ? 'liked' : ''}" data-lb="like">${icon('heart')}<span>${g.likes_count}</span></button>` : ''}
+            ${g.own ? `<button class="gvi-btn danger sm" data-lb="delete" aria-label="Delete">${icon('trash')}</button>` : (g.author ? `<button class="gvi-btn ghost sm" data-lb="report" aria-label="Report">${icon('flag')}</button>` : '')}
           </div>
         </div>`;
     }
@@ -99,6 +101,7 @@ export async function render({ el, query }) {
           g.liked = r.liked;
           g.likes_count = r.likes_count;
           show();
+          syncTile(i);
         } catch (err) { toastError(err); }
       } else if (act === 'report') reportDialog(api, 'gallery', g.id);
       else if (act === 'delete') {
@@ -167,7 +170,7 @@ export async function render({ el, query }) {
         m.close();
         toast(r.pending ? 'Uploaded! It will appear after admin approval.' : 'Uploaded! +10 XP', 'success', 5000);
         scope = 'mine';
-        $$('[data-scope]', el).forEach((x) => x.classList.toggle('active', x.dataset.scope === scope));
+        $$('[data-scope]', el).forEach((x) => x.classList.toggle('is-active', x.dataset.scope === scope));
         setQuery({ scope });
         load(true);
       } catch (err) {
@@ -177,23 +180,46 @@ export async function render({ el, query }) {
     });
   }
 
-  el.addEventListener('click', (e) => {
+  function syncTile(i) {
+    const btn = $(`.g-tile[data-index="${i}"] [data-like]`, wrap);
+    if (!btn) return;
+    btn.classList.toggle('liked', items[i].liked);
+    $('span', btn).textContent = items[i].likes_count;
+  }
+
+  el.addEventListener('click', async (e) => {
     if (e.target.closest('[data-act="upload"]')) return uploadDialog();
     const t = e.target.closest('.g-tile');
+    if (t && e.target.closest('[data-like]')) {
+      const i = Number(t.dataset.index);
+      try {
+        const r = await api.post('gallery/like', { id: items[i].id });
+        items[i].liked = r.liked;
+        items[i].likes_count = r.likes_count;
+        syncTile(i);
+      } catch (err) { toastError(err); }
+      return;
+    }
     if (t) return lightbox(Number(t.dataset.index));
     const s = e.target.closest('[data-scope]');
     if (s) {
       scope = s.dataset.scope;
-      $$('[data-scope]', el).forEach((x) => x.classList.toggle('active', x === s));
+      $$('[data-scope]', el).forEach((x) => x.classList.toggle('is-active', x === s));
       setQuery({ scope });
       load(true);
     }
     const ty = e.target.closest('[data-type]');
     if (ty) {
       type = ty.dataset.type;
-      $$('[data-type]', el).forEach((x) => x.classList.toggle('active', x === ty));
+      $$('[data-type]', el).forEach((x) => x.classList.toggle('is-active', x === ty));
       setQuery({ type });
       load(true);
+    }
+  });
+  el.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('g-tile')) {
+      e.preventDefault();
+      lightbox(Number(e.target.dataset.index));
     }
   });
   load(true);

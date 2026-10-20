@@ -1,12 +1,14 @@
 /* G VI Fan Hub service worker - makes the app installable and loads the shell offline.
    Bump VERSION after uploading new files so every device picks up the update. */
-const VERSION = 'gvi-v1.0.0';
+const VERSION = 'gvi-v2.0.0';
 const SHELL = [
   './',
   'index.html',
   'offline.html',
   'manifest.webmanifest',
   'assets/css/app.css',
+  'assets/css/gvi-fx.css',
+  'assets/css/gvi-app.css',
   'assets/js/app.js',
   'assets/js/shell.js',
   'assets/js/core/api.js',
@@ -14,6 +16,11 @@ const SHELL = [
   'assets/js/core/icons.js',
   'assets/js/core/router.js',
   'assets/js/core/state.js',
+  'assets/js/core/gvi-motion.js',
+  'assets/js/core/gvi-background.js',
+  'assets/js/core/gvi-nav.js',
+  'assets/js/core/gvi-countdown.js',
+  'assets/js/core/gvi-ui.js',
   'assets/js/pages/auth.js',
   'assets/js/pages/home.js',
   'assets/js/pages/countdown.js',

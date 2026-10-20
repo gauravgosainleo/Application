@@ -10,11 +10,8 @@ export async function render({ el, query }) {
   let tab = TABS.some((t) => t[0] === query.tab) ? query.tab : 'chats';
   let cleanupTab = null;
   el.innerHTML = `
-    <div class="page-head compact">
-      <div><h2>${icon('chat')} Friends & Chat</h2></div>
-      <div class="tabs" role="tablist">
-        ${TABS.map(([k, ic, l]) => `<button class="tab" data-tab="${k}" role="tab">${icon(ic)}<span>${l}</span><span class="tab-badge" data-tb="${k}" hidden></span></button>`).join('')}
-      </div>
+    <div class="gvi-tabs" role="tablist">
+      ${TABS.map(([k, , l]) => `<button class="tab" data-tab="${k}" role="tab">${l}<span class="tab-badge" data-tb="${k}" hidden></span></button>`).join('')}
     </div>
     <div class="tab-body"></div>`;
   const body = $('.tab-body', el);
@@ -31,7 +28,10 @@ export async function render({ el, query }) {
     tab = next;
     if (cleanupTab) cleanupTab();
     cleanupTab = null;
-    $$('.tab', el).forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+    $$('.tab', el).forEach((t) => {
+      t.classList.toggle('active', t.dataset.tab === tab);
+      t.setAttribute('aria-selected', String(t.dataset.tab === tab));
+    });
     setQuery({ tab, chat: extra.chat || null, user: null });
     if (tab === 'chats') cleanupTab = renderChats(body, extra.chat || query.chat, query.user, badges);
     else if (tab === 'friends') renderFriends(body, switchTab);
@@ -61,14 +61,14 @@ function renderChats(body, openId, openUser, refreshBadges) {
 
   body.innerHTML = `
     <div class="chat-layout">
-      <section class="conv-pane card">
+      <section class="conv-pane">
         <div class="conv-tools">
-          <div class="search-input small">${icon('search')}<input type="search" placeholder="Search chats…"></div>
-          <button class="btn btn-primary btn-sm new-group" title="New group">${icon('users')} <span>New group</span></button>
+          <div class="gvi-search-inline small">${icon('search')}<input type="search" class="gvi-input" placeholder="Search chats" aria-label="Search chats"></div>
+          <button class="conv-new new-group" title="New group" aria-label="New group">${icon('plus')}</button>
         </div>
         <div class="conv-list">${loader()}</div>
       </section>
-      <section class="thread-pane card">
+      <section class="thread-pane">
         <div class="thread-empty">${icon('chat', 'empty-icon')}<h3>Your crew chats</h3><p class="muted">Pick a conversation, or open a friend's profile to start one.</p></div>
       </section>
     </div>`;
@@ -95,7 +95,7 @@ function renderChats(body, openId, openUser, refreshBadges) {
   function renderList() {
     const q = searchInput.value.trim().toLowerCase();
     const shown = conversations.filter((c) => !q || (c.name || '').toLowerCase().includes(q));
-    listEl.innerHTML = shown.length ? shown.map(convRow).join('') : `<div class="empty small">${icon('chat', 'empty-icon')}<p>${q ? 'No chats found.' : 'No chats yet. Message a friend or create a group!'}</p><a class="btn btn-ghost btn-sm" href="#/friends?tab=friends">See friends</a></div>`;
+    listEl.innerHTML = shown.length ? shown.map(convRow).join('') : `<div class="empty small">${icon('chat', 'empty-icon')}<p>${q ? 'No chats found.' : 'No chats yet. Message a friend or create a group!'}</p><a class="gvi-btn ghost sm" href="#/friends?tab=friends">See friends</a></div>`;
   }
 
   async function loadList() {
@@ -216,9 +216,10 @@ function renderChats(body, openId, openUser, refreshBadges) {
     const sub = c.type === 'direct'
       ? `<span class="presence-text"><span class="presence-dot inline ${esc(c.other.presence)}"></span>${esc(presenceLabel(c.other))}${c.other.presence_text ? ' · ' + esc(c.other.presence_text) : ''}</span>`
       : `<span>${c.members.length} members · ${esc(c.members.slice(0, 4).map((m) => m.name.split(' ')[0]).join(', '))}${c.members.length > 4 ? '…' : ''}</span>`;
-    return `<button class="icon-btn back-btn" data-act="back" aria-label="Back">${icon('chevronLeft')}</button>
-      <button class="th-id" data-act="info">${c.type === 'direct' ? avatar(c.other, 'md') : groupAvatar(c)}<span><strong>${esc(c.name || 'Group')}</strong><small class="muted">${sub}</small></span></button>
-      <button class="icon-btn" data-act="info" aria-label="Details">${icon(c.type === 'direct' ? 'user' : 'settings')}</button>`;
+    return `<button class="th-btn back-btn" data-act="back" aria-label="Back">${icon('chevronLeft')}</button>
+      <button class="th-id" data-act="info">${c.type === 'direct' ? avatar(c.other, 'sm') : groupAvatar(c, 'sm')}<span><strong>${esc(c.name || 'Group')}</strong><small>${sub}</small></span></button>
+      <button class="th-btn" data-act="info" aria-label="${c.type === 'direct' ? 'View profile' : 'Group info'}">${icon(c.type === 'direct' ? 'user' : 'settings')}</button>
+      <button class="th-btn" data-act="info" aria-label="More">${icon('more')}</button>`;
   }
 
   async function openConversation(id) {
@@ -247,9 +248,9 @@ function renderChats(body, openId, openUser, refreshBadges) {
         <div class="thread-head">${threadHeader(active)}</div>
         <div class="thread-msgs"><div class="msgs-end"></div></div>
         <form class="composer">
-          <label class="icon-btn attach" title="Send a photo">${icon('image')}<input type="file" accept="image/*" hidden></label>
-          <div class="composer-input"><div class="attach-preview" hidden></div><textarea rows="1" maxlength="2000" placeholder="Message ${esc(active.name || '')}…"></textarea></div>
-          <button class="btn btn-primary send-btn" type="submit" aria-label="Send">${icon('send')}</button>
+          <label class="composer-attach attach" title="Send a photo" aria-label="Send a photo">${icon('attach')}<input type="file" accept="image/*" hidden></label>
+          <div class="composer-input"><div class="attach-preview" hidden></div><textarea rows="1" maxlength="2000" placeholder="Message ${esc((active.name || '').split(' ')[0])}…"></textarea></div>
+          <button class="composer-send send-btn" type="submit" aria-label="Send">${icon('send')}</button>
         </form>
       </div>`;
     messages = [];
@@ -551,11 +552,10 @@ function groupCreate(onCreated) {
 /* ================================================================= FRIENDS */
 
 function friendCard(f, actions) {
-  return `<div class="card friend-card" data-uid="${f.id}">
-    <a href="#/profile/${f.id}" class="fc-top">${avatar(f, 'lg')}<span class="fc-name"><strong>${esc(f.name)}</strong><small class="muted">@${esc(f.username)}</small></span></a>
-    <div class="fc-meta">${levelPill(f.level)}<span class="muted small">${esc(presenceLabel(f))}</span></div>
-    ${f.presence_text ? `<p class="fc-activity">“${esc(f.presence_text)}”</p>` : ''}
-    <div class="fc-actions">${actions}</div>
+  return `<div class="gvi-person-card friend-card" data-uid="${f.id}" data-tilt="card">
+    <a href="#/profile/${f.id}" class="pc-top">${avatar(f, 'md')}<span class="pc-name"><strong>${esc(f.name)}</strong><small>${esc(presenceLabel(f))}${f.presence_text ? ' · ' + esc(f.presence_text) : ''}</small></span><span class="level-pill">LV ${esc(f.level)}</span></a>
+    <div class="pc-actions">${actions}</div>
+    <span class="gvi-glare"></span>
   </div>`;
 }
 
@@ -571,14 +571,14 @@ async function renderFriends(body, switchTab) {
   }
   const online = data.friends.filter((f) => f.presence !== 'offline').length;
   body.innerHTML = `
-    <div class="row-between section-head"><h3>${data.friends.length} friends · <span class="online-text">${online} online</span></h3>
-      <button class="btn btn-ghost btn-sm" data-act="find">${icon('userPlus')} Add friends</button></div>
+    <div class="gvi-section-head"><h2 class="gvi-section-title">${icon('users')}${data.friends.length} friends · <span class="online-text">${online} online</span></h2>
+      <button class="gvi-btn ghost sm" data-act="find">${icon('userPlus')}Add friends</button></div>
     ${data.friends.length ? `<div class="friends-grid">${data.friends.map((f) => friendCard(f, `
-      <button class="btn btn-primary btn-sm" data-act="message">${icon('chat')} Message</button>
-      <button class="icon-btn" data-act="menu" aria-label="More">${icon('more')}</button>`)).join('')}</div>`
-      : emptyState('users', 'No friends yet', 'Find other fans and send them a friend request.', '<button class="btn btn-primary" data-act="find">Find players</button>')}
+      <button class="gvi-btn sm" data-act="message">${icon('chat')}Message</button>
+      <button class="gvi-btn ghost sm icon-only" data-act="menu" aria-label="More">${icon('more')}</button>`)).join('')}</div>`
+      : emptyState('users', 'No friends yet', 'Find other fans and send them a friend request.', '<button class="gvi-btn" data-act="find">Find players</button>')}
     ${data.blocked.length ? `<details class="blocked-list"><summary>${icon('ban')} Blocked players (${data.blocked.length})</summary>
-      ${data.blocked.map((b) => `<div class="member-row" data-uid="${b.id}">${avatar(b, 'sm', { presence: false })}<strong>${esc(b.name)}</strong><button class="btn btn-ghost btn-sm" data-act="unblock">Unblock</button></div>`).join('')}</details>` : ''}`;
+      ${data.blocked.map((b) => `<div class="member-row" data-uid="${b.id}">${avatar(b, 'sm', { presence: false })}<strong>${esc(b.name)}</strong><button class="gvi-btn ghost sm" data-act="unblock">Unblock</button></div>`).join('')}</details>` : ''}`;
 
   body.onclick = async (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
@@ -639,13 +639,13 @@ async function renderRequests(body) {
   }
   setState({ counts: { ...state.counts, friend_requests: data.incoming.length } });
   body.innerHTML = `
-    <section class="section"><div class="section-head"><h3>${icon('userPlus')} Received (${data.incoming.length})</h3></div>
+    <section class="gvi-req-section"><div class="gvi-section-head"><h2 class="gvi-section-title">${icon('userPlus')}Received (${data.incoming.length})</h2></div>
       ${data.incoming.length ? `<div class="friends-grid">${data.incoming.map((f) => friendCard(f, `
-        <button class="btn btn-primary btn-sm" data-act="accept">${icon('check')} Accept</button>
-        <button class="btn btn-ghost btn-sm" data-act="decline">Decline</button>`)).join('')}</div>` : '<p class="muted">No pending requests.</p>'}
+        <button class="gvi-btn sm" data-act="accept">${icon('check')}Accept</button>
+        <button class="gvi-btn ghost sm" data-act="decline">Decline</button>`)).join('')}</div>` : '<p class="muted">No pending requests.</p>'}
     </section>
-    <section class="section"><div class="section-head"><h3>${icon('send')} Sent (${data.outgoing.length})</h3></div>
-      ${data.outgoing.length ? `<div class="friends-grid">${data.outgoing.map((f) => friendCard(f, `<button class="btn btn-ghost btn-sm" data-act="cancel">Cancel request</button>`)).join('')}</div>` : '<p class="muted">No sent requests.</p>'}
+    <section class="gvi-req-section"><div class="gvi-section-head"><h2 class="gvi-section-title">${icon('send')}Sent (${data.outgoing.length})</h2></div>
+      ${data.outgoing.length ? `<div class="friends-grid">${data.outgoing.map((f) => friendCard(f, `<button class="gvi-btn ghost sm" data-act="cancel">Cancel request</button>`)).join('')}</div>` : '<p class="muted">No sent requests.</p>'}
     </section>`;
   body.onclick = async (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
@@ -672,20 +672,20 @@ async function renderRequests(body) {
 
 export function relationButton(u) {
   switch (u.relation) {
-    case 'friends': return `<button class="btn btn-ghost btn-sm" data-act="message">${icon('chat')} Message</button>`;
-    case 'outgoing': return `<button class="btn btn-ghost btn-sm" data-act="cancel">${icon('clock')} Requested</button>`;
-    case 'incoming': return `<button class="btn btn-primary btn-sm" data-act="accept">${icon('check')} Accept</button>`;
-    case 'blocked': return `<button class="btn btn-ghost btn-sm" data-act="unblock">Unblock</button>`;
-    default: return `<button class="btn btn-primary btn-sm" data-act="add">${icon('userPlus')} Add friend</button>`;
+    case 'friends': return `<button class="gvi-btn ghost sm" data-act="message">${icon('chat')}Message</button>`;
+    case 'outgoing': return `<button class="gvi-btn ghost sm" data-act="cancel">${icon('clock')}Requested</button>`;
+    case 'incoming': return `<button class="gvi-btn sm" data-act="accept">${icon('check')}Accept</button>`;
+    case 'blocked': return `<button class="gvi-btn ghost sm" data-act="unblock">Unblock</button>`;
+    default: return `<button class="gvi-btn sm" data-act="add">${icon('userPlus')}Add friend</button>`;
   }
 }
 
 function renderFind(body) {
   body.innerHTML = `
-    <div class="find-bar search-input big">${icon('search')}<input type="search" placeholder="Search by name or @username…" autofocus></div>
-    <h3 class="find-title muted small">Recently active players</h3>
+    <div class="find-bar gvi-search-inline big">${icon('search')}<input type="search" class="gvi-input" placeholder="Search by name or @username…" autofocus></div>
+    <h3 class="find-title">Recently active players</h3>
     <div class="find-results friends-grid">${loader()}</div>`;
-  const input = $('input', body);
+  const input = $('.find-bar input', body);
   const results = $('.find-results', body);
   let list = [];
   let seq = 0;

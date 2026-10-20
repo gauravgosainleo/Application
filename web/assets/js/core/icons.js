@@ -82,3 +82,8 @@ export function icon(name, cls = '') {
   const fillOnly = name === 'play';
   return `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true" fill="${fillOnly ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 }
+
+/** The raw SVG children of an icon (for embedding inside another SVG, e.g. the nav wheel). */
+export function iconBody(name) {
+  return P[name] || P.info;
+}
