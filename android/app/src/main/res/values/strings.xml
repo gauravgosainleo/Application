@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Uni-Vishwas</string>
+    <string name="channel_updates_name">Society updates</string>
+    <string name="channel_updates_description">New notices, events, photos, polls and society updates.</string>
+    <string name="default_update_title">Uni-Vishwas update</string>
+    <string name="choose_file">Choose a file</string>
+    <string name="no_file_picker">No app available to pick a file.</string>
+    <string name="cannot_open_link">Nothing on this phone can open that link.</string>
+    <string name="download_started">Download started.</string>
+    <string name="download_failed">Could not start the download.</string>
+    <string name="update_title">Update available</string>
+    <string name="update_message">A newer version of Uni-Vishwas is available on Google Play. Update now to keep getting the latest features and society notifications.</string>
+    <string name="update_now">Update</string>
+    <string name="update_later">Later</string>
+</resources>

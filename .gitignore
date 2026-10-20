@@ -1,0 +1,16 @@
+# Signing material and server secrets must never be committed: this repository is public.
+*.jks
+*.keystore
+*.p12
+keystore.properties
+CREDENTIALS*.txt
+firebase-service-account*.json
+*-firebase-adminsdk-*.json
+**/config/config.php
+
+# Build output
+*.aab
+*.apk
+.gradle/
+build/
+local.properties

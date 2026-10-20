@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      No statusBarColor: the app draws edge-to-edge (required behaviour from
+      Android 15), and MainActivity shows the teal root behind the bars.
+    -->
+    <style name="Theme.Uninav" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/uninav_primary</item>
+        <item name="colorPrimaryDark">@color/uninav_primary_dark</item>
+        <item name="colorAccent">@color/uninav_primary</item>
+        <item name="android:windowBackground">@color/uninav_background</item>
+    </style>
+</resources>

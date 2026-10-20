@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext HTTP is refused everywhere, with no per-domain exception and no
+  custom or user-installed trust anchors. This is one of the mobile items
+  START-HERE-SECURITY-UPGRADE.md requires: a server-side redirect cannot
+  protect credentials an old client already sent over http://.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
