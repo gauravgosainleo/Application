@@ -74,17 +74,18 @@ If you used a different mailbox, change `username` and `from_email` too.
 
 ### 3. Upload the files
 
-Upload **the contents of the `web/` folder** (not the folder itself) into `public_html` on your domain
+Upload **the contents of the `web/` folder** (not the folder itself) into the folder the site lives in —
+`public_html/GTA6/App/` for the current site (or `public_html` itself to run it at the domain root)
 (e.g. with FileZilla: host and username are in hPanel → **Files → FTP Accounts**, port 21).
 
 - Make sure hidden files such as `.htaccess` are uploaded (FileZilla: *Server → Force showing hidden files*).
 - Do not upload `app/config.local.php` if you created one for local testing.
 
-After uploading, `public_html` should contain `index.html`, `install.php`, `admin/`, `api/`, `app/`, `assets/`, `cron/`, `downloads/`, `uploads/` …
+After uploading, that folder should contain `index.html`, `install.php`, `admin/`, `api/`, `app/`, `assets/`, `cron/`, `downloads/`, `uploads/` …
 
 ### 4. Run the installer
 
-Open `https://learninganddevelopment.net/install.php`.
+Open `https://learninganddevelopment.net/GTA6/App/install.php`.
 It checks PHP, the database connection and email settings, then creates all tables, the admin account
 (username pre-filled as **gg6admin** – type your admin password) and starter content
 (news sources, trailers, catalogue, events, rewards, polls).
@@ -101,7 +102,7 @@ HTTPS is required to install the app on phones/desktops and for secure logins.
 hPanel → **Advanced → Cron Jobs** → *Custom* → run **every hour**:
 
 ```
-/usr/bin/php /home/u694536902/domains/learninganddevelopment.net/public_html/cron/fetch-news.php
+/usr/bin/php /home/u694536902/domains/learninganddevelopment.net/public_html/GTA6/App/cron/fetch-news.php
 ```
 
 (The installer shows the exact path for your account.) The job only fetches news when the interval you picked
@@ -115,10 +116,10 @@ hPanel → **Advanced → PHP Configuration**: choose **PHP 8.2 or newer**. For 
 
 ### 8. First login
 
-- Admin panel: `https://learninganddevelopment.net/admin/` → username `gg6admin` and the password you typed in the installer.
+- Admin panel: `https://learninganddevelopment.net/GTA6/App/admin/` → username `gg6admin` and the password you typed in the installer.
   You can change it any time under **Admin account**. This repository is public, so never write the password in its files.
 - Use **Settings → test email** in the admin panel to confirm OTP emails are delivered.
-- Players open `https://learninganddevelopment.net/` and register.
+- Players open `https://learninganddevelopment.net/GTA6/App/` and register.
 
 ---
 
@@ -135,10 +136,10 @@ The site is a Progressive Web App:
 ### Android app (APK)
 
 A ready-made APK is included at `web/downloads/gvi-fan-hub.apk`, so after uploading it is available at
-`https://learninganddevelopment.net/downloads/gvi-fan-hub.apk`. The login page (and the profile menu on Android phones)
+`https://learninganddevelopment.net/GTA6/App/downloads/gvi-fan-hub.apk`. The login page (and the profile menu on Android phones)
 links to it. Players allow *Install unknown apps* for their browser when Android asks.
 
-The app opens `https://learninganddevelopment.net/` and adds native features: the Android share sheet,
+The app opens `https://learninganddevelopment.net/GTA6/App/` and adds native features: the Android share sheet,
 add-to-calendar for the launch date, file downloads, photo/video pickers, full-screen trailers, back gesture support
 and an offline/retry screen. Because all content comes from the website, **website updates never need a new APK**.
 
@@ -148,13 +149,13 @@ You only need this if you change the domain or the Android code.
 
 **Option A – GitHub Actions (no installs needed):** on GitHub open **Actions → Android APK → Run workflow**
 (optionally enter a different website address). When it finishes, download the `gvi-fan-hub-apk` artifact and
-upload `gvi-fan-hub.apk` to `public_html/downloads/`.
+upload `gvi-fan-hub.apk` to the site's `downloads/` folder (`public_html/GTA6/App/downloads/`).
 
 **Option B – your computer:** install [Android Studio](https://developer.android.com/studio) (or JDK 17+ and the Android SDK), then:
 
 ```bash
 cd android
-./gradlew assembleRelease                                         # uses https://learninganddevelopment.net/
+./gradlew assembleRelease                                         # uses https://learninganddevelopment.net/GTA6/App/
 ./gradlew assembleRelease -PappUrl=https://your-domain.com/       # or another address / sub-folder
 # result: android/app/build/outputs/apk/release/app-release.apk
 ```
@@ -198,7 +199,7 @@ signed with a different key must uninstall it once before installing the newly s
 ## Project structure
 
 ```
-web/                      → upload the contents to public_html
+web/                      → upload the contents to the site folder (public_html/GTA6/App/)
   index.html, assets/     player app (single-page app + PWA: manifest.webmanifest, sw.js)
   admin/                  admin panel
   api/index.php           JSON API entry point (index.php?r=module/action)
