@@ -156,7 +156,7 @@ and an offline/retry screen. Because all content comes from the website, **websi
 
 You only need this if you change the domain or the Android code.
 
-**Option A – GitHub Actions (no installs needed):** on GitHub open **Actions → Android APK → Run workflow**
+**Option A – GitHub Actions (no installs needed):** on GitHub open **Actions → Android APK and AAB → Run workflow**
 (optionally enter a different website address). When it finishes, download the `gvi-fan-hub-apk` artifact and
 upload `gvi-fan-hub.apk` to the site's `downloads/` folder (`public_html/GTA6/App/downloads/`).
 
@@ -191,6 +191,36 @@ keytool -genkeypair -v -keystore gvi-release.jks -alias gvi -keyalg RSA -keysize
 
 Keep the keystore and passwords safe and never commit them (they are git-ignored). Players who installed an APK
 signed with a different key must uninstall it once before installing the newly signed one.
+
+#### Publishing on Google Play (.aab)
+
+Google Play takes an Android App Bundle signed with your **upload key** — the key from the step above, never the
+development key. The build refuses to make a bundle until `android/keystore.properties` exists.
+
+```bash
+cd android
+./gradlew bundleRelease
+# result: android/app/build/outputs/bundle/release/app-release.aab
+```
+
+With the four signing secrets set, **Actions → Android APK and AAB → Run workflow** also produces it as the
+`gvi-fan-hub-aab` artifact.
+
+In the [Play Console](https://play.google.com/console):
+
+1. **Create app**, keep **Play App Signing** on (Google keeps the app signing key, you keep the upload key), and
+   upload the `.aab` to **Internal testing** first, then **Production**.
+2. The package name `com.gvifanhub.app` can never change after the first upload.
+3. Every new upload needs a higher `versionCode` in `android/app/build.gradle`. Website changes need no new upload.
+4. Fill in **App content**: a privacy policy URL (the app stores email, profile, messages and photos), the
+   **Data safety** form, the content rating questionnaire, target audience, and account deletion — players delete
+   their account under *Profile → Security*, also on the website at `…/GTA6/App/#/profile?tab=security`.
+5. Present it as an **unofficial fan app** and don't use Rockstar's logos or key art in the listing, or Google can
+   reject it for impersonation / intellectual property.
+6. Players who installed the APK from the website must uninstall it once before installing from Google Play
+   (it is signed with a different key).
+
+If the upload key is ever lost, ask Google Play support to reset it (possible because Play App Signing is on).
 
 ---
 

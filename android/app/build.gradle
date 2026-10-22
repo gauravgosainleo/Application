@@ -59,3 +59,13 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 }
+
+// Google Play rejects bundles signed with the debug key, so the .aab needs the upload key.
+def hasUploadKey = keystorePropertiesFile.exists()
+tasks.matching { it.name == 'bundleRelease' }.configureEach {
+    doFirst {
+        if (!hasUploadKey) {
+            throw new GradleException('bundleRelease needs your upload key: create android/keystore.properties (see README, "Publishing on Google Play").')
+        }
+    }
+}

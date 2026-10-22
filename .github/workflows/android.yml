@@ -1,4 +1,4 @@
-name: Android APK
+name: Android APK and AAB
 
 on:
   push:
@@ -43,26 +43,37 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > release.jks
             printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
               "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
-            echo "Signing the APK with your release key."
+            echo "Signing the APK and the Play bundle (.aab) with your key."
           else
-            echo "::notice::No signing secrets set - the APK is signed with a temporary debug key (see README)."
+            echo "::notice::No signing secrets set - the APK is signed with a temporary debug key and no .aab is built (see README)."
           fi
 
-      - name: Build APK
+      - name: Build APK (and the Google Play .aab when signing secrets exist)
         env:
           APP_URL: ${{ inputs.app_url }}
         run: |
           chmod +x gradlew
+          tasks="assembleRelease"
+          if [ -f keystore.properties ]; then tasks="$tasks bundleRelease"; fi
           if [ -n "$APP_URL" ]; then
-            ./gradlew --no-daemon assembleRelease -PappUrl="$APP_URL"
+            ./gradlew --no-daemon $tasks -PappUrl="$APP_URL"
           else
-            ./gradlew --no-daemon assembleRelease
+            ./gradlew --no-daemon $tasks
           fi
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk dist/gvi-fan-hub.apk
+          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then
+            cp app/build/outputs/bundle/release/app-release.aab dist/gvi-fan-hub.aab
+          fi
 
       - uses: actions/upload-artifact@v7
         with:
           name: gvi-fan-hub-apk
           path: android/dist/gvi-fan-hub.apk
           if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: hashFiles('android/dist/gvi-fan-hub.aab') != ''
+        with:
+          name: gvi-fan-hub-aab
+          path: android/dist/gvi-fan-hub.aab
