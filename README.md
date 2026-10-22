@@ -121,6 +121,15 @@ hPanel → **Advanced → PHP Configuration**: choose **PHP 8.2 or newer**. For 
 - Use **Settings → test email** in the admin panel to confirm OTP emails are delivered.
 - Players open `https://learninganddevelopment.net/GTA6/App/` and register.
 
+### 9. Updating to a new version
+
+Update zips leave out `app/config.php` so your passwords are not overwritten.
+**Extract the zip over the existing `GTA6/App/` folder — don't delete the folder first.**
+The server needs to keep `app/config.php`, `app/storage/` (install lock and app key) and `uploads/` (player photos).
+
+If you did start from an empty folder: upload `app/config.php` again with your database (and mailbox) password,
+then open `install.php` once if it asks — the installer keeps all existing data.
+
 ---
 
 ## Desktop and Android apps
@@ -238,6 +247,7 @@ With `'transport' => 'log'` emails (including OTP codes) are written to `web/app
 | Problem | Fix |
 | --- | --- |
 | "The app is not installed yet" | Open `install.php` (and check the database password in `app/config.php`). |
+| "Server error (500)" everywhere, or "app/config.php is missing" | `app/config.php` was deleted (for example by replacing the whole folder during an update). Upload it again with your passwords — see step 9. |
 | No OTP email | Check the mailbox password in `config.php`, send a test email from the admin **Settings** page, look in spam. |
 | Uploads fail | Raise `upload_max_filesize` / `post_max_size` in hPanel → PHP Configuration. |
 | No news fetched | Open **News auto mode** in the admin panel (last run & errors per source); PHP needs cURL or `allow_url_fopen`. |

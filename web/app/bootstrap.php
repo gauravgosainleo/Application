@@ -18,6 +18,23 @@ if (function_exists('mb_internal_encoding')) {
 }
 
 $__configFile = file_exists(APP_DIR . '/config.local.php') ? APP_DIR . '/config.local.php' : APP_DIR . '/config.php';
+if (!is_file($__configFile)) {
+    // A missing config would otherwise be a blank 500; say what to fix instead.
+    $msg = 'Server setup problem: app/config.php is missing. Upload app/config.php again with your database password (see README).';
+    if (PHP_SAPI === 'cli') {
+        fwrite(STDERR, $msg . "\n");
+        exit(1);
+    }
+    http_response_code(500);
+    if (strpos(isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '', '/api/') !== false) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => $msg, 'code' => 'config_missing']);
+    } else {
+        header('Content-Type: text/plain; charset=utf-8');
+        echo $msg;
+    }
+    exit;
+}
 $GLOBALS['__gvi_config'] = require $__configFile;
 unset($__configFile);
 
