@@ -1,6 +1,6 @@
 /* G VI Fan Hub service worker - makes the app installable and loads the shell offline.
    Bump VERSION after uploading new files so every device picks up the update. */
-const VERSION = 'gvi-v2.0.0';
+const VERSION = 'gvi-v2.1.0';
 const SHELL = [
   './',
   'index.html',
@@ -56,14 +56,20 @@ self.addEventListener('fetch', (event) => {
   if (/\/(api|admin|cron|uploads)\//.test(url.pathname) || url.pathname.endsWith('install.php')) return;
 
   if (req.mode === 'navigate') {
+    // Only the app itself refreshes the cached shell; other pages (e.g. privacy.php) are cached under their own URL.
+    const scope = new URL(self.registration.scope).pathname;
+    const isShell = url.pathname === scope || url.pathname === scope + 'index.html';
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(VERSION).then((c) => c.put('index.html', copy));
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(isShell ? 'index.html' : req, copy));
+          }
           return res;
         })
-        .catch(() => caches.match('index.html').then((r) => r || caches.match('offline.html')))
+        .catch(() => (isShell ? caches.match('index.html') : caches.match(req))
+          .then((r) => r || caches.match('offline.html')))
     );
     return;
   }

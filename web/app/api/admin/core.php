@@ -165,6 +165,8 @@ function api_admin_settings()
         'announcement'              => (string)setting('announcement', ''),
         'login_otp_mode'            => setting('login_otp_mode', 'optional'),
         'gallery_requires_approval' => setting('gallery_requires_approval', '1') === '1',
+        'contact_email'             => (string)setting('contact_email', ''),
+        'privacy_url'               => app_url('privacy.php'),
         'map'                       => public_config()['map'],
         'mail'                      => [
             'transport' => cfg('mail.transport'),
@@ -204,6 +206,13 @@ function api_admin_settings_save()
     }
     if (has_input('gallery_requires_approval')) {
         set_setting('gallery_requires_approval', in_bool('gallery_requires_approval') ? '1' : '0');
+    }
+    if (has_input('contact_email')) {
+        $contact = in_str('contact_email', 190);
+        if ($contact !== '' && !valid_email($contact)) {
+            fail('Enter a valid privacy contact email, or leave it empty.', 422);
+        }
+        set_setting('contact_email', $contact);
     }
     return api_admin_settings();
 }

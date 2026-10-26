@@ -205,6 +205,7 @@ export async function render({ el, params, query }) {
             <div class="set-label">Equipped cosmetics</div>
             <div class="equip-row"></div>
             <div class="form-actions start"><button class="gvi-btn ghost" data-tabgo="edit">${icon('edit')}Edit profile</button><button class="gvi-btn danger" data-act="logout">${icon('logout')}Log out</button></div>
+            <a class="acct-link" href="privacy.php">${icon('lock')}Privacy policy — what we store and who can see it</a>
           </section>
         </div>`;
       loadEquip($('.equip-row', body));

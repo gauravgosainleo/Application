@@ -50,7 +50,7 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
           <div class="auth-body"></div>
           <div class="gvi-auth-foot">
             <span>Unofficial fan app. Not affiliated with Rockstar Games or Take-Two Interactive.</span>
-            <span class="gvi-auth-links"><a href="admin/" class="admin-link">${icon('shield')}Admin login</a><a class="apk-link" href="downloads/gvi-fan-hub.apk" download>${icon('phone')}Android app</a></span>
+            <span class="gvi-auth-links"><a href="privacy.php" class="privacy-link">${icon('lock')}Privacy</a><a href="admin/" class="admin-link">${icon('shield')}Admin login</a><a class="apk-link" href="downloads/gvi-fan-hub.apk" download>${icon('phone')}Android app</a></span>
           </div>
         </div>
       </section>
@@ -263,6 +263,7 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
         <div class="strength" data-score="0"><i></i><i></i><i></i><i></i><i></i><span></span></div>
         ${pwField('confirm_password', 'Confirm password', 'new-password')}
         <p class="muted tiny">At least 8 characters with a letter and a number.</p>
+        <label class="check consent"><input type="checkbox" name="consent"><span>I'm 18 or older and I accept the <a href="privacy.php" target="_blank" rel="noopener">Privacy Policy</a>, including that I'm responsible for what I share and do in the app.</span></label>
         <button class="gvi-cta" type="submit">Create account${icon('chevronRight')}</button>
       </form>`;
     const form = $('form', body);
@@ -320,6 +321,7 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
       if (payload.otp.length !== 6) return showAlert('Press “Send OTP” and enter the 6-digit code from your email.');
       if (payload.password.length < 8) return showAlert('Password must be at least 8 characters.');
       if (payload.password !== payload.confirm_password) return showAlert('Password and confirm password do not match.');
+      if (!form.consent.checked) return showAlert('Please confirm you are 18 or older and accept the Privacy Policy.');
       const btn = $('button[type=submit]', form);
       setBusy(btn, true, 'Creating account…');
       try {

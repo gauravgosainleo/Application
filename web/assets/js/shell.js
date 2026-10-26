@@ -197,6 +197,7 @@ export function mountShell(root, { onLogout }) {
         <a href="#/profile">${icon('user')} My profile</a>
         <a href="#/events?tab=rewards">${icon('gift')} Rewards & badges</a>
         <a href="#/profile?tab=settings">${icon('shield')} Settings & privacy</a>
+        <a href="privacy.php">${icon('lock')} Privacy policy</a>
         <button data-act="install" class="install-btn">${icon('download')} Install app</button>
         <a href="downloads/gvi-fan-hub.apk" download class="apk-menu-link">${icon('phone')} Get the Android app</a>
         <button data-act="logout" class="pp-logout">${icon('logout')} Log out</button>

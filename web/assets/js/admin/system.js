@@ -83,6 +83,9 @@ async function settings({ el }) {
           <p class="muted small">Registration always requires an email OTP. This setting controls codes at login.</p>
           <h3>${icon('image')} Gallery</h3>
           <label class="switch"><input type="checkbox" name="gallery_requires_approval" ${s.gallery_requires_approval ? 'checked' : ''}><span class="slider"></span><span>Player uploads need admin approval before they are public</span></label>
+          <h3>${icon('lock')} Privacy policy</h3>
+          <label class="field"><span>Privacy contact email</span><input class="input" type="email" name="contact_email" maxlength="190" value="${esc(s.contact_email || '')}" placeholder="${esc((s.mail && s.mail.from) || 'privacy@your-domain.com')}"></label>
+          <p class="muted small">Shown in the <a href="${esc(s.privacy_url)}" target="_blank" rel="noopener">Privacy Policy</a> for questions and data requests. Leave empty to use the OTP sender address.</p>
           <div class="form-actions"><button class="btn btn-primary" type="submit">${icon('check')} Save settings</button></div>
         </form>
         <div class="stack">
@@ -137,6 +140,7 @@ async function settings({ el }) {
           announcement: form.announcement.value.trim(),
           login_otp_mode: form.login_otp_mode.value,
           gallery_requires_approval: form.gallery_requires_approval.checked,
+          contact_email: form.contact_email.value.trim(),
         });
         toast('Settings saved', 'success');
         draw();

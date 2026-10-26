@@ -248,6 +248,12 @@ body.gvi { font-size: 15px; line-height: 1.5; }
 .gvi-auth-links a { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text-2); font-size: 13px; }
 .gvi-auth-links .icon { width: 16px; height: 16px; }
 .is-app .gvi-auth-links .apk-link { display: none !important; }
+.check.consent { align-items: flex-start; margin: 2px 0 4px; font-size: 13px; line-height: 1.45; color: var(--text-2); user-select: auto; }
+.check.consent input { flex: none; margin-top: 1px; }
+.check.consent a { color: var(--primary); font-weight: 700; }
+.acct-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.acct-link:hover { color: #fff; text-decoration: none; }
+.acct-link .icon { width: 15px; height: 15px; }
 /* legacy screens (banned / not installed / offline) reuse the glass card */
 .auth-screen { position: relative; z-index: 1; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
 .auth-screen .auth-card { width: 100%; max-width: 460px; padding: 28px; border-radius: 24px; background: linear-gradient(180deg, rgba(28, 18, 51, .92), rgba(16, 10, 30, .92)); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 30px 80px rgba(0, 0, 0, .5), 0 0 80px -30px var(--primary); }

@@ -119,6 +119,9 @@ hPanel → **Advanced → PHP Configuration**: choose **PHP 8.2 or newer**. For 
 - Admin panel: `https://learninganddevelopment.net/GTA6/App/admin/` → username `gg6admin` and the password you typed in the installer.
   You can change it any time under **Admin account**. This repository is public, so never write the password in its files.
 - Use **Settings → test email** in the admin panel to confirm OTP emails are delivered.
+- Under **Settings → Privacy policy** enter the email address players should use for privacy questions and data
+  requests. It appears on the Privacy Policy page (`https://learninganddevelopment.net/GTA6/App/privacy.php`);
+  when empty, the OTP sender address is shown.
 - Players open `https://learninganddevelopment.net/GTA6/App/` and register.
 
 ### 9. Updating to a new version
@@ -212,9 +215,15 @@ In the [Play Console](https://play.google.com/console):
    upload the `.aab` to **Internal testing** first, then **Production**.
 2. The package name `com.gvifanhub.app` can never change after the first upload.
 3. Every new upload needs a higher `versionCode` in `android/app/build.gradle`. Website changes need no new upload.
-4. Fill in **App content**: a privacy policy URL (the app stores email, profile, messages and photos), the
-   **Data safety** form, the content rating questionnaire, target audience, and account deletion — players delete
-   their account under *Profile → Security*, also on the website at `…/GTA6/App/#/profile?tab=security`.
+4. Fill in **App content**:
+   - **Privacy policy:** `https://learninganddevelopment.net/GTA6/App/privacy.php` (written from what the app
+     actually stores; it also states that players are responsible for what they share and do).
+   - **Data safety:** collected — email, name, user IDs, photos/videos, messages and other user content, app
+     interactions, IP address/device type for sign-in security; nothing is sold, shared for ads or tracked;
+     data is encrypted in transit and players can delete their account.
+   - **Target audience:** 18+ (sign-up asks players to confirm they are 18 or older), plus the content rating questionnaire.
+   - **Account deletion:** in the app under *Profile → Security → Delete account*, and on the website at
+     `https://learninganddevelopment.net/GTA6/App/#/profile?tab=security`.
 5. Present it as an **unofficial fan app** and don't use Rockstar's logos or key art in the listing, or Google can
    reject it for impersonation / intellectual property.
 6. Players who installed the APK from the website must uninstall it once before installing from Google Play
