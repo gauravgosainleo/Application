@@ -238,6 +238,7 @@ export async function render({ el, params, query }) {
             <h3>${icon('alert')} Delete account</h3>
             <p class="muted">Permanently deletes your profile, messages, markers, discussions and uploads. This cannot be undone.</p>
             <button class="gvi-btn danger" data-act="delete-account">${icon('trash')}Delete my account</button>
+            <a class="acct-link" href="delete-account.php">${icon('mail')}Forgot your password? Delete with an email code instead</a>
           </section>
         </div>`;
       loadSessions($('.sessions', body));

@@ -222,8 +222,9 @@ In the [Play Console](https://play.google.com/console):
      interactions, IP address/device type for sign-in security; nothing is sold, shared for ads or tracked;
      data is encrypted in transit and players can delete their account.
    - **Target audience:** 18+ (sign-up asks players to confirm they are 18 or older), plus the content rating questionnaire.
-   - **Account deletion:** in the app under *Profile → Security → Delete account*, and on the website at
-     `https://learninganddevelopment.net/GTA6/App/#/profile?tab=security`.
+   - **Account deletion:** give Play the link `https://learninganddevelopment.net/GTA6/App/delete-account.php`.
+     Players enter their email, confirm with a one-time code and the account and its data are deleted at once —
+     no app or password needed. Signed-in players can also use *Profile → Security → Delete account* in the app.
 5. Present it as an **unofficial fan app** and don't use Rockstar's logos or key art in the listing, or Google can
    reject it for impersonation / intellectual property.
 6. Players who installed the APK from the website must uninstall it once before installing from Google Play

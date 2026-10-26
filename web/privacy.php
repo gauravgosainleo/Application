@@ -14,15 +14,7 @@ function pp_e($s)
 }
 
 $appName = cfg('app.name', 'G VI Fan Hub');
-$contact = '';
-try {
-    $contact = trim((string)setting('contact_email', ''));
-} catch (Throwable $e) {
-    $contact = '';
-}
-if ($contact === '' || !valid_email($contact)) {
-    $contact = (string)cfg('mail.from_email', '');
-}
+$contact = privacy_contact_email();
 $siteUrl = app_url();
 $effective = '26 October 2026';
 
@@ -38,52 +30,7 @@ header('Cache-Control: no-cache');
 <meta name="theme-color" content="#07030f">
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="assets/img/icons/favicon-32.png" sizes="32x32" type="image/png">
-<style>
-  @font-face { font-family: 'Inter'; font-weight: 400 800; font-display: swap; src: url('assets/fonts/inter-latin.woff2') format('woff2'); }
-  @font-face { font-family: 'Bebas Neue'; font-weight: 400; font-display: swap; src: url('assets/fonts/bebas-neue-latin.woff2') format('woff2'); }
-  :root { --bg: #07030f; --panel: rgba(255, 255, 255, .045); --line: rgba(255, 255, 255, .1); --text: #f6f2ff; --text-2: #d5cdea; --muted: #9b90b9; --primary: #ff3d8b; --primary-2: #ff8a3d; }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--text-2); font: 16px/1.65 Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    background-image: radial-gradient(900px 500px at 0% -10%, rgba(255, 61, 139, .18), transparent 60%), radial-gradient(800px 500px at 110% 0%, rgba(124, 58, 237, .18), transparent 60%); background-attachment: fixed; }
-  a { color: var(--primary); }
-  a:hover { color: #ff6fa8; }
-  .top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px clamp(16px, 4vw, 32px);
-    background: rgba(7, 3, 15, .82); border-bottom: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
-  .brand { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-weight: 800; }
-  .brand img { width: 34px; height: 34px; }
-  .back { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 12px; color: #fff; text-decoration: none; font-weight: 700; font-size: 14px;
-    background: linear-gradient(135deg, var(--primary), var(--primary-2)); box-shadow: 0 8px 24px -8px var(--primary); }
-  .back:hover { color: #fff; filter: brightness(1.06); }
-  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
-  h1 { margin: 0; color: #fff; font-family: 'Bebas Neue', Impact, sans-serif; font-weight: 400; font-size: clamp(42px, 8vw, 64px); line-height: 1; letter-spacing: .03em; }
-  .meta { margin: 10px 0 24px; color: var(--muted); font-size: 14px; }
-  h2 { margin: 40px 0 10px; color: #fff; font-size: 22px; line-height: 1.3; scroll-margin-top: 80px; }
-  h3 { margin: 22px 0 6px; color: #fff; font-size: 17px; }
-  p, li { color: var(--text-2); }
-  ul { padding-left: 22px; }
-  li { margin: 4px 0; }
-  strong { color: #fff; }
-  .card { padding: 18px 20px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); }
-  .card ul { margin: 6px 0 0; }
-  .summary { border-color: rgba(255, 61, 139, .35); background: linear-gradient(180deg, rgba(255, 61, 139, .1), rgba(255, 255, 255, .02)); }
-  .duty { border-color: rgba(255, 194, 77, .45); background: linear-gradient(180deg, rgba(255, 194, 77, .1), rgba(255, 255, 255, .02)); }
-  .toc { columns: 2 240px; column-gap: 24px; margin: 0; padding-left: 20px; font-size: 15px; }
-  .toc li { break-inside: avoid; }
-  .table-wrap { overflow-x: auto; margin: 10px 0; border-radius: 14px; border: 1px solid var(--line); }
-  table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 520px; }
-  th, td { padding: 10px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
-  th { color: #fff; background: rgba(255, 255, 255, .05); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
-  tr:last-child td { border-bottom: 0; }
-  code { padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, .08); color: #fff; font-size: .92em; word-break: break-all; }
-  footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
-  @media print {
-    body { background: #fff; color: #000; }
-    .top { display: none; }
-    h1, h2, h3, strong, p, li, td, th { color: #000 !important; }
-    .card, .table-wrap { border-color: #999; background: none; }
-  }
-</style>
+<link rel="stylesheet" href="assets/css/legal.css">
 </head>
 <body>
 <header class="top">
@@ -101,7 +48,7 @@ header('Cache-Control: no-cache');
       <li>We don't sell your data, show ads or use analytics or tracking tools.</li>
       <li>Other players can see your public profile and what you post. Your email address is never shown to other players.</li>
       <li><strong>You are solely responsible for your account, the information and content you share, and everything you do in the app</strong> (see <a href="#responsibility">section 6</a>).</li>
-      <li>You can delete your account and data at any time in <em>Profile → Security → Delete account</em>.</li>
+      <li>You can delete your account and data at any time in <em>Profile → Security → Delete account</em>, or request deletion without the app on our <a href="delete-account.php">account deletion page</a>.</li>
     </ul>
   </section>
 
@@ -264,7 +211,7 @@ header('Cache-Control: no-cache');
     <li><strong>See and correct your data:</strong> view and edit your profile and settings at any time; see your signed-in devices under <em>Profile → Security</em>.</li>
     <li><strong>Control visibility:</strong> Friends-only profile, "Only friends can message me", Invisible status, and per-item visibility for statuses and map markers.</li>
     <li><strong>Delete content:</strong> delete your messages, statuses, discussions, comments, gallery uploads and markers whenever you like.</li>
-    <li><strong>Delete your account:</strong> in the app or on the website, open <em>Profile → Security → Delete account</em> and confirm with your password (website: <a href="<?= pp_e($siteUrl) ?>#/profile?tab=security"><?= pp_e($siteUrl) ?>#/profile?tab=security</a>). This permanently removes your account, profile, friends, statuses, discussions and comments, gallery uploads, markers, votes, rewards, notifications and sign-in sessions, and erases the text and photos of messages you sent. If you can't sign in, email us from the address on your account and we'll delete it for you.</li>
+    <li><strong>Delete your account:</strong> in the app or on the website, open <em>Profile → Security → Delete account</em> and confirm with your password. Without the app or your password, request deletion at <a href="<?= pp_e($siteUrl) ?>delete-account.php"><strong><?= pp_e($siteUrl) ?>delete-account.php</strong></a>: we email a one-time code to your account's address and delete the account as soon as you confirm it. Either way this permanently removes your account, profile, friends, statuses, discussions and comments, gallery uploads, markers, votes, rewards, notifications and sign-in sessions, and erases the text and photos of messages you sent. If you no longer have access to your email, contact us and we'll help.</li>
     <li><strong>Get a copy, or ask us anything about your data:</strong> email us (see <a href="#contact">Contact us</a>). We answer within 30 days.</li>
   </ul>
   <p>Depending on where you live (for example under India's Digital Personal Data Protection Act 2023, the EU/UK GDPR or California law), you may also have the right to access, correct, erase or port your data, to withdraw consent, to object to certain uses, to name someone to act for you, and to complain to your data protection authority. We will not treat you differently for using these rights.</p>

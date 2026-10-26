@@ -172,6 +172,52 @@ function api_auth_reset()
     return ['reset' => true];
 }
 
+/* ----------------------------------------- account deletion request (no password needed) */
+
+/** Step 1 of delete-account.php: emails a one-time code that proves the account is yours. */
+function api_auth_delete_request()
+{
+    $email = strtolower(in_str('email', 190, true, 'Email'));
+    if (!valid_email($email)) {
+        fail('Please enter a valid email address.', 422);
+    }
+    rate_limit_or_fail('delete-ip:' . client_ip(), 20, 3600);
+    $user = q_one('SELECT id, name, email FROM users WHERE email = ?', [$email]);
+    if ($user) {
+        $code = otp_issue($email, 'delete', (int)$user['id']);
+        send_otp_email($email, $user['name'], $code, 'delete');
+    }
+    // Same answer whether or not the account exists (prevents email discovery).
+    return ['sent' => true, 'email' => $email, 'resend_in' => 60];
+}
+
+/** Step 2: checks the code and permanently deletes the account and its data. */
+function api_auth_delete_confirm()
+{
+    $email = strtolower(in_str('email', 190, true, 'Email'));
+    $otp = in_str('otp', 12, true, 'Code');
+    if (!in_bool('confirm')) {
+        fail('Please confirm that you want to permanently delete your account.', 422, 'confirm_required');
+    }
+    $user = q_one('SELECT * FROM users WHERE email = ?', [$email]);
+    if (!$user) {
+        fail('Incorrect or expired code.', 422, 'otp_invalid');
+    }
+    otp_check($email, 'delete', $otp);
+    // Checked through the session row so banned players can delete their data too.
+    $sess = session_current('user');
+    delete_user_account($user);
+    if ($sess && (int)$sess['subject_id'] === (int)$user['id']) {
+        auth_clear_cookie(USER_COOKIE);
+    }
+    $app = cfg('app.name', 'G VI Fan Hub');
+    Mailer::send($email, 'Your ' . $app . ' account was deleted', mail_layout('Account deleted',
+        'Hi ' . ($user['name'] ?: 'there') . ",
+Your " . $app . ' account and its data have been permanently deleted, as you requested.', null,
+        "If you didn't ask for this, reply to this email. You can create a new account at any time."));
+    return ['deleted' => true];
+}
+
 function api_auth_logout()
 {
     session_end('user');
@@ -203,5 +249,7 @@ return [
     'forgot'           => ['POST', 'public', 'api_auth_forgot'],
     'reset'            => ['POST', 'public', 'api_auth_reset'],
     'logout'           => ['POST', 'public', 'api_auth_logout'],
+    'delete-request'   => ['POST', 'public', 'api_auth_delete_request'],
+    'delete-confirm'   => ['POST', 'public', 'api_auth_delete_confirm'],
     'me'               => ['GET', 'public', 'api_auth_me'],
 ];

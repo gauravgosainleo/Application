@@ -419,6 +419,17 @@ function setting($key, $default = null)
     return array_key_exists($key, $all) && $all[$key] !== null ? $all[$key] : $default;
 }
 
+/** Address for privacy questions and data requests: Admin -> Settings, else the OTP sender. */
+function privacy_contact_email()
+{
+    try {
+        $contact = trim((string)setting('contact_email', ''));
+    } catch (Throwable $e) {
+        $contact = '';
+    }
+    return $contact !== '' && valid_email($contact) ? $contact : (string)cfg('mail.from_email', '');
+}
+
 function set_setting($key, $value)
 {
     q('INSERT INTO settings (`key`, `value`, updated_at) VALUES (?, ?, ?)

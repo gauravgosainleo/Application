@@ -141,26 +141,7 @@ function api_admin_user_delete()
     if (!$u) {
         fail('User not found.', 404);
     }
-    $files = array_merge(
-        [$u['avatar'], $u['cover']],
-        q_col('SELECT image FROM statuses WHERE user_id = ?', [$id]),
-        q_col('SELECT file_path FROM gallery_items WHERE user_id = ?', [$id]),
-        q_col('SELECT cover_image FROM discussions WHERE user_id = ?', [$id]),
-        q_col('SELECT attachment FROM messages WHERE user_id = ?', [$id])
-    );
-    foreach (q_col("SELECT cm.conversation_id FROM conversation_members cm JOIN conversations c ON c.id = cm.conversation_id
-        WHERE cm.user_id = ? AND cm.role = 'owner' AND c.type = 'group'", [$id]) as $cid) {
-        $next = q_val('SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id <> ? ORDER BY joined_at ASC LIMIT 1', [$cid, $id]);
-        if ($next) {
-            q("UPDATE conversation_members SET role = 'owner' WHERE conversation_id = ? AND user_id = ?", [$cid, $next]);
-        }
-    }
-    q('UPDATE messages SET body = NULL, attachment = NULL, deleted_at = ? WHERE user_id = ?', [now(), $id]);
-    q("DELETE FROM auth_sessions WHERE subject_type = 'user' AND subject_id = ?", [$id]);
-    q('DELETE FROM users WHERE id = ?', [$id]);
-    foreach ($files as $f) {
-        Upload::delete($f);
-    }
+    delete_user_account($u);
     return ['deleted' => true];
 }
 

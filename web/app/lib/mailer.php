@@ -218,6 +218,10 @@ function send_otp_email($email, $name, $code, $purpose)
         $subject = $code . ' is your ' . $app . ' password reset code';
         $html = mail_layout('Reset your password', $greeting . "\nUse this one-time code to set a new password:", $code,
             "The code expires in {$minutes} minutes. If you didn't request a reset, your password is still safe and you can ignore this email.");
+    } elseif ($purpose === 'delete') {
+        $subject = $code . ' is your ' . $app . ' account deletion code';
+        $html = mail_layout('Delete your account', $greeting . "\nSomeone (hopefully you) asked to permanently delete your account and its data. Enter this code to confirm:", $code,
+            "The code expires in {$minutes} minutes. If you didn't ask for this, ignore this email and your account stays as it is.");
     } else {
         $subject = $code . ' is your ' . $app . ' login code';
         $html = mail_layout('Your login code', $greeting . "\nSomeone (hopefully you) is signing in to your account. Enter this code to continue:", $code,

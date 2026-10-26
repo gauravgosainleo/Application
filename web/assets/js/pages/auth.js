@@ -50,7 +50,7 @@ export function renderAuth(root, { message, onLoggedIn, onBanned }) {
           <div class="auth-body"></div>
           <div class="gvi-auth-foot">
             <span>Unofficial fan app. Not affiliated with Rockstar Games or Take-Two Interactive.</span>
-            <span class="gvi-auth-links"><a href="privacy.php" class="privacy-link">${icon('lock')}Privacy</a><a href="admin/" class="admin-link">${icon('shield')}Admin login</a><a class="apk-link" href="downloads/gvi-fan-hub.apk" download>${icon('phone')}Android app</a></span>
+            <span class="gvi-auth-links"><a href="privacy.php" class="privacy-link">${icon('lock')}Privacy</a><a href="delete-account.php" class="delete-link">${icon('trash')}Delete account</a><a href="admin/" class="admin-link">${icon('shield')}Admin login</a><a class="apk-link" href="downloads/gvi-fan-hub.apk" download>${icon('phone')}Android app</a></span>
           </div>
         </div>
       </section>
