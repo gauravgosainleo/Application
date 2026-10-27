@@ -15,7 +15,7 @@ android {
     compileSdk 36
 
     defaultConfig {
-        applicationId 'com.gvifanhub.app'
+        applicationId 'com.g6'
         minSdk 24
         targetSdk 36
         versionCode 3

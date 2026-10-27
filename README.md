@@ -213,7 +213,7 @@ In the [Play Console](https://play.google.com/console):
 
 1. **Create app**, keep **Play App Signing** on (Google keeps the app signing key, you keep the upload key), and
    upload the `.aab` to **Internal testing** first, then **Production**.
-2. The package name `com.gvifanhub.app` can never change after the first upload.
+2. The package name `com.g6` (the app ID registered in the Play Console) can never change.
 3. Every new upload needs a higher `versionCode` in `android/app/build.gradle`. Website changes need no new upload.
 4. Fill in **App content**:
    - **Privacy policy:** `https://learninganddevelopment.net/GTA6/App/privacy.php` (written from what the app
