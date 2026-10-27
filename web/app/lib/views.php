@@ -3,6 +3,9 @@
  * Presenters shared by several API modules.
  */
 
+/** Report reason for child sexual abuse or exploitation: shown first and flagged for admins. */
+const CSAE_REPORT_REASON = 'Child sexual abuse or exploitation';
+
 const DISCUSSION_CATEGORIES = [
     'General', 'News & Leaks', 'Theories', 'Gameplay', 'Map & Locations',
     'Vehicles', 'Characters', 'Online', 'Fan Art', 'Off-topic',

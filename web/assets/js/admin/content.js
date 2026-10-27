@@ -219,8 +219,8 @@ async function reports({ el, query }) {
       items = await api.get('admin/reports', { status });
       if (status === 'open') setPending({ reports: items.length });
       box.innerHTML = items.length ? items.map((r) => `
-        <article class="card report" data-id="${r.id}">
-          <div class="row gap wrap"><span class="tag tag-danger">${esc(r.target_type)}</span><span class="tag ${r.status === 'open' ? 'tag-warn' : ''}">${esc(r.status)}</span><span class="muted small">${esc(fmtDateTime(r.created_at))}</span></div>
+        <article class="card report ${r.child_safety ? 'report-csae' : ''}" data-id="${r.id}">
+          <div class="row gap wrap">${r.child_safety ? `<span class="tag tag-live">${icon('alert')} Child safety: act now</span>` : ''}<span class="tag tag-danger">${esc(r.target_type)}</span><span class="tag ${r.status === 'open' ? 'tag-warn' : ''}">${esc(r.status)}</span><span class="muted small">${esc(fmtDateTime(r.created_at))}</span></div>
           <p class="report-reason">“${esc(r.reason)}”</p>
           <div class="report-target">${r.target.image ? `<img src="${esc(asset(r.target.image))}" alt="">` : ''}<span>${esc(r.target.preview)}</span></div>
           <p class="muted small">Reported by ${r.reporter ? `<strong>${esc(r.reporter.name)}</strong> (@${esc(r.reporter.username)})` : 'a deleted user'}${r.owner ? ` · Content by <strong>${esc(r.owner.name)}</strong> (@${esc(r.owner.username)})${r.owner.banned ? ' — already blocked' : ''}` : ''}</p>

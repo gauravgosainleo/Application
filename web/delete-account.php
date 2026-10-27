@@ -90,7 +90,7 @@ header('Cache-Control: no-cache');
   <p>If you no longer have access to your email address, contact us<?php if ($contact !== ''): ?> at <a href="mailto:<?= pp_e($contact) ?>?subject=<?= rawurlencode($appName . ' account deletion request') ?>"><strong><?= pp_e($contact) ?></strong></a><?php endif; ?> with your username and any details that show the account is yours. We reply within 30 days.</p>
 
   <footer>
-    <p>© <?= gmdate('Y') ?> <?= pp_e($appName) ?> · Unofficial fan app · <a href="privacy.php">Privacy Policy</a> · <a href="./">Open the app</a></p>
+    <p>© <?= gmdate('Y') ?> <?= pp_e($appName) ?> · Unofficial fan app · <a href="privacy.php">Privacy Policy</a> · <a href="child-safety.php">Child Safety Standards</a> · <a href="./">Open the app</a></p>
   </footer>
 </main>
 <script>

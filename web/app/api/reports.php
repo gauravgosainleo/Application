@@ -23,10 +23,18 @@ function api_reports_create()
     if ($type === 'user' && $targetId === $me) {
         fail('You cannot report yourself.', 422);
     }
-    if (q_val("SELECT 1 FROM reports WHERE reporter_id = ? AND target_type = ? AND target_id = ? AND status = 'open'", [$me, $type, $targetId])) {
+    $csae = strpos($reason, CSAE_REPORT_REASON) === 0;
+    $open = q_one("SELECT id, reason FROM reports WHERE reporter_id = ? AND target_type = ? AND target_id = ? AND status = 'open'", [$me, $type, $targetId]);
+    if ($open) {
+        // A child-safety report must never be lost behind an earlier, milder report.
+        if ($csae && strpos($open['reason'], CSAE_REPORT_REASON) !== 0) {
+            q('UPDATE reports SET reason = ? WHERE id = ?', [str_limit($reason . ' (earlier: ' . $open['reason'] . ')', 255), $open['id']]);
+        }
         return ['reported' => true, 'duplicate' => true];
     }
-    rate_limit_or_fail('report:' . $me, 15, 3600);
+    if (!$csae) {
+        rate_limit_or_fail('report:' . $me, 15, 3600);
+    }
     q("INSERT INTO reports (reporter_id, target_type, target_id, reason, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)",
         [$me, $type, $targetId, $reason, now()]);
     return ['reported' => true];

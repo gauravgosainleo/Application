@@ -247,9 +247,12 @@ function api_admin_reports()
 {
     current_admin();
     $status = in_enum('status', ['open', 'resolved', 'dismissed', 'all'], 'open');
+    // Child-safety reports always come first.
+    $order = 'ORDER BY (reason LIKE ?) DESC, id DESC LIMIT 200';
+    $csae = CSAE_REPORT_REASON . '%';
     $rows = $status === 'all'
-        ? q_all('SELECT * FROM reports ORDER BY id DESC LIMIT 200')
-        : q_all('SELECT * FROM reports WHERE status = ? ORDER BY id DESC LIMIT 200', [$status]);
+        ? q_all("SELECT * FROM reports {$order}", [$csae])
+        : q_all("SELECT * FROM reports WHERE status = ? {$order}", [$status, $csae]);
     $out = [];
     foreach ($rows as $r) {
         $target = admin_report_target($r['target_type'], $r['target_id']);
@@ -258,6 +261,7 @@ function api_admin_reports()
             'target_type' => $r['target_type'],
             'target_id'   => (int)$r['target_id'],
             'reason'      => $r['reason'],
+            'child_safety'=> strpos($r['reason'], CSAE_REPORT_REASON) === 0,
             'status'      => $r['status'],
             'created_at'  => iso($r['created_at']),
             'reporter'    => $r['reporter_id'] ? admin_user_mini($r['reporter_id']) : null,

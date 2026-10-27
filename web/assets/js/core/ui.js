@@ -258,13 +258,14 @@ export function promptBox({ title, label, placeholder = '', value = '', confirmT
 
 /** Report dialog used by discussions, comments, profiles, statuses, gallery and chat. */
 export async function reportDialog(apiClient, targetType, targetId) {
-  const reasons = ['Spam or advertising', 'Harassment or hate', 'Spoilers without warning', 'Inappropriate content', 'Cheating / scams'];
+  const reasons = ['Child sexual abuse or exploitation', 'Spam or advertising', 'Harassment or hate', 'Spoilers without warning', 'Inappropriate content', 'Cheating / scams'];
   const res = await promptBox({
     title: 'Report',
     label: 'What is wrong?',
     placeholder: 'Describe the problem…',
     confirmText: 'Send report',
-    extraHTML: `<div class="chip-row report-reasons">${reasons.map((r) => `<button type="button" class="chip">${esc(r)}</button>`).join('')}</div>`,
+    extraHTML: `<div class="chip-row report-reasons">${reasons.map((r) => `<button type="button" class="chip">${esc(r)}</button>`).join('')}</div>
+      <p class="muted small report-note">Child safety reports are reviewed first. See our <a href="child-safety.php" target="_blank" rel="noopener">Child Safety Standards</a>.</p>`,
   });
   if (!res || !res.value) return;
   try {

@@ -997,3 +997,8 @@ body.gvi { font-size: 15px; line-height: 1.5; }
   .form-grid { grid-template-columns: minmax(0, 1fr); }
   .form-grid .span-2 { grid-column: auto; }
 }
+
+/* report dialog: note under the reasons */
+.report-note { margin: 10px 0 0; }
+.report-note a { color: var(--primary); font-weight: 700; }
+.report-reasons { flex-wrap: wrap; overflow: visible; }

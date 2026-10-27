@@ -217,7 +217,7 @@ header('Cache-Control: no-cache');
   <p>Depending on where you live (for example under India's Digital Personal Data Protection Act 2023, the EU/UK GDPR or California law), you may also have the right to access, correct, erase or port your data, to withdraw consent, to object to certain uses, to name someone to act for you, and to complain to your data protection authority. We will not treat you differently for using these rights.</p>
 
   <h2 id="children">10. Age requirement</h2>
-  <p>Grand Theft Auto VI is a game for adults, and <?= pp_e($appName) ?> is meant for players who are <strong>18 or older</strong> (or the age of majority where they live). Do not create an account if you are younger. If we learn that an account belongs to a child, we will delete it. If you believe a child has given us information, please contact us.</p>
+  <p>Grand Theft Auto VI is a game for adults, and <?= pp_e($appName) ?> is meant for players who are <strong>18 or older</strong> (or the age of majority where they live). Do not create an account if you are younger. If we learn that an account belongs to a child, we will delete it. If you believe a child has given us information, please contact us. Our <a href="child-safety.php">Child Safety Standards</a> explain how we prevent, report and act on child sexual abuse and exploitation.</p>
 
   <h2 id="transfers">11. Where your data is stored</h2>
   <p>Your data is stored on servers provided by our hosting provider, which may be located outside your country. By using the app you understand that your information may be processed there, with the safeguards described in this policy.</p>
@@ -231,7 +231,7 @@ header('Cache-Control: no-cache');
     Please email us from the address on your account so we can verify that the request is yours.</p>
 
   <footer>
-    <p>© <?= gmdate('Y') ?> <?= pp_e($appName) ?> · Unofficial fan app · <a href="./">Open the app</a></p>
+    <p>© <?= gmdate('Y') ?> <?= pp_e($appName) ?> · Unofficial fan app · <a href="child-safety.php">Child Safety Standards</a> · <a href="delete-account.php">Delete account</a> · <a href="./">Open the app</a></p>
   </footer>
 </main>
 </body>

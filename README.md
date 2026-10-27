@@ -225,6 +225,11 @@ In the [Play Console](https://play.google.com/console):
    - **Account deletion:** give Play the link `https://learninganddevelopment.net/GTA6/App/delete-account.php`.
      Players enter their email, confirm with a one-time code and the account and its data are deleted at once —
      no app or password needed. Signed-in players can also use *Profile → Security → Delete account* in the app.
+   - **Child safety standards (CSAE):** give Play the link `https://learninganddevelopment.net/GTA6/App/child-safety.php`.
+     It covers the zero-tolerance rules, the 18+ requirement, Report and Block, how reports are handled and the
+     child safety contact (the privacy contact email from **Settings**). In-app reports with the reason
+     "Child sexual abuse or exploitation" appear first under **Reports** in the admin panel, marked *Child safety: act now*.
+     Keep **Gallery approval** on in Settings: the page only promises moderated uploads while it is on.
 5. Present it as an **unofficial fan app** and don't use Rockstar's logos or key art in the listing, or Google can
    reject it for impersonation / intellectual property.
 6. Players who installed the APK from the website must uninstall it once before installing from Google Play

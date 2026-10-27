@@ -119,6 +119,7 @@ a.stat-tile:hover { transform: translateY(-2px); border-color: var(--border-2); 
 .report-reason { font-size: 1.02rem; font-weight: 600; margin: 10px 0 8px; }
 .report-target { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(10,6,18,.55); border: 1px solid var(--border); margin-bottom: 8px; color: var(--text-2); }
 .report-target img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+.report-csae { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger), 0 0 28px -8px var(--danger); }
 .review h2 { margin-top: 8px; }
 .review-cover { max-height: 260px; border-radius: 12px; margin: 10px 0; }
 .review-actions { margin: 16px 0; padding: 12px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
